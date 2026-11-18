@@ -34,6 +34,18 @@ const TEMPLATE = `
     <div class="row"><button id="info">情報 (?)</button><button id="tel" title="T 1 / T 0">状態の送信を切替 (T)</button></div>
   </div>
   <div class="card">
+    <h2>エンコーダ ENC1〜7(数値)</h2>
+    <table class="t" id="enc_tbl"></table>
+    <div class="row"><button id="encabs" title="E">絶対角度を読む (E)</button></div>
+    <div class="small mute">積算 = 起動からの回転量(「状態の送信 (T)」が ON のとき更新)。絶対角度 = AS5600 の値(0〜2π)で、「関節 0 のときの値」を設定の <code>encZero</code> に入れます(基板の Web UI の「今の位置を 0 にする」なら読み書き不要)。値は<b>基板につないだときだけ</b>出ます。コネクタの位置は「基板情報」タブ(3 番)。</div>
+  </div>
+  <div class="card">
+    <h2>Wi-Fi 設定(USB でつないでいるときだけ)</h2>
+    <div class="row"><input type="text" id="w_ssid" placeholder="SSID" class="grow" autocomplete="off"><input type="password" id="w_pass" placeholder="パスワード(オープンなら空)" class="grow" autocomplete="off"></div>
+    <div class="row"><button class="pri" id="w_save">保存して再起動</button><button id="w_q" title="W ?">今の設定 (W ?)</button><button id="w_clr" title="W -">保存を消す</button></div>
+    <div class="small mute">接続先は基板に保存されます(再起動してもそのまま)。パスワードは 8〜64 文字。2.4GHz の Wi-Fi だけです。再起動のあとは、基板の画面(<code>http://integral-main.local/</code> または IP)が開け、この UI でも「Wi-Fi (UDP)」でつなげます。<b>Wi-Fi 経由(UDP)からは設定できません</b>(ネットワークから書き換えられないように)。再起動後は、接続し直して「状態の送信」を ON にしてください。</div>
+  </div>
+  <div class="card">
     <h2>足回り(PC から操縦)</h2>
     <div class="row"><button id="d1" class="grow">有効 (D 1)</button><button id="d0" class="grow">無効 (D 0)</button></div>
     <div class="small mute" style="margin-bottom:4px">下の円を<b>押している間だけ</b> <code>V</code> を送ります(離すと 0)。キーボード: W/S = 前後、A/D = 左右、Q/E = 旋回。</div>
@@ -86,6 +98,15 @@ export default {
       csvKeys: Object.keys(SERIES), csvName: "main_board", note: "「状態の送信 (T 1)」が ON のとき 10Hz で更新されます。",
     });
 
+    // ---------- エンコーダの数値 ----------
+    const encV = { acc: Array(7).fill(NaN), abs: Array(7).fill(NaN) };
+    const fx = (v, d) => (Number.isFinite(v) ? v.toFixed(d) : "—");
+    function drawEnc() {
+      $("enc_tbl").innerHTML = "<tr><th>ポート</th><th>積算 [rad]</th><th>絶対角度 [rad]</th><th>絶対角度 [°]</th></tr>" +
+        encV.acc.map((a, i) => `<tr><td>ENC${i + 1}</td><td>${fx(a, 3)}</td><td>${fx(encV.abs[i], 4)}</td><td>${fx((encV.abs[i] * 180) / Math.PI, 1)}</td></tr>`).join("");
+    }
+    drawEnc();
+
     function send(text, quiet = false) {
       if (!tr.connected) { if (!quiet) log.err("未接続です"); return false; }
       try { ctx.conn().mode === "udp" ? tr.sendUdp(text) : tr.sendLine(text); } catch (e) { log.err(String(e.message || e)); return false; }
@@ -95,12 +116,17 @@ export default {
 
     // ---------- 受信 ----------
     function onLine(line) {
+      if (/^e( \d=|$)/.test(line)) {   // E の応答: e 1=1.2345 2=nan ...
+        for (const [, n, v] of line.matchAll(/(\d)=(-?[\d.]+|nan)/g)) encV.abs[+n - 1] = v === "nan" ? NaN : +v;
+        drawEnc(); ctx.markRx(); return;
+      }
       const m = mainDecodeLine(line);
       if (m.type === "telem") {
         st.telem = true;
         const r = { t: (performance.now() - st.t0) / 1000, vx: m.v[0], vy: m.v[1], wz: m.v[2], vb: m.vb, gz: m.gz };
         m.w.forEach((x, i) => (r["w" + (i + 1)] = x));
         m.enc.forEach((x, i) => (r["e" + (i + 1)] = x));
+        m.enc.forEach((x, i) => (encV.acc[i] = x)); drawEnc();
         charts.push(r);
         $("s_vb").textContent = m.vb.toFixed(2) + " V";
         $("s_en").textContent = m.en ? "有効" : "無効";
@@ -174,6 +200,21 @@ export default {
     $("estop0").onclick = () => send("X 0");
     $("d1").onclick = () => send("D 1"); $("d0").onclick = () => { stopAll(); send("D 0"); };
     $("info").onclick = () => send("?");
+    $("encabs").onclick = () => send("E");
+    // Wi-Fi(USB / UART だけ。基板は UDP からの W を受け付けない)。空白・記号は % 表記にして送る
+    const wifiOk = () => { if (ctx.conn().mode === "udp") { log.err("Wi-Fi の設定は USB(シリアル)でつないでいるときだけです"); return false; } return tr.connected; };
+    $("w_q").onclick = () => { if (wifiOk()) send("W ?"); };
+    $("w_clr").onclick = () => { if (wifiOk() && confirm("保存した Wi-Fi の接続先を消して再起動します。")) send("W -"); };
+    $("w_save").onclick = () => {
+      if (!wifiOk()) return;
+      const ssid = $("w_ssid").value, pass = $("w_pass").value;
+      if (!ssid || ssid.length > 32) return log.err("SSID は 1〜32 文字です");
+      if (pass && (pass.length < 8 || pass.length > 64)) return log.err("パスワードは 8〜64 文字です(オープンなら空)");
+      if (!confirm(`Wi-Fi の接続先を「${ssid}」にして、基板を再起動します。`)) return;
+      send(`W ${encodeURIComponent(ssid)} ${pass ? encodeURIComponent(pass) : "-"}`, true);   // パスワードをログに出さない
+      log.add(`W ${ssid} ${pass ? "********" : "(パスワードなし)"}`);
+      $("w_pass").value = "";
+    };
     $("tel").onclick = () => { st.telem = !st.telem; send(st.telem ? "T 1" : "T 0"); };
 
     // ---------- 出力 ----------

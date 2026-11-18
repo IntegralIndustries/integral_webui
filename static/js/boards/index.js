@@ -108,13 +108,13 @@ export const BOARDS = [
     steps: [
       "電池(2S〜3S)を XT30 に。ロジックだけ試すなら USB-C でもよい。",
       "<b>USB で試す</b>: USB-C を PC につなぎ、この画面で接続方法「USB シリアル」を選んで接続(Chrome / Edge ならサーバ不要)。",
-      "<b>Wi-Fi で試す</b>: <code>firmware/src/secrets.h</code> に SSID とパスワードを書いて書き込み、接続方法「Wi-Fi (UDP)」(<code>server.py</code> が必要)。ホスト名は <code>integral-main.local</code>、つながらなければ IP アドレス。",
+      "<b>Wi-Fi で試す</b>: 先に USB でつないで、画面の「Wi-Fi 設定」に SSID とパスワードを入れて保存(基板に残ります。<code>config/secrets.h</code> を書いてビルドしてもよい)。そのあと接続方法「Wi-Fi (UDP)」(<code>server.py</code> が必要)。ホスト名は <code>integral-main.local</code>、つながらなければ IP アドレス。",
       "「足回り」の<b>有効 (D 1)</b> を押し、円を押している間だけ動く。まずは車輪を浮かせて、小さい速度で。",
     ],
     notes: [
       { k: "w", html: "<b>足回りは起動時は無効</b>です。PC の <code>D 1</code>、PS4 の OPTIONS、USER スイッチの短押しのどれかで有効にします。" },
       { k: "w", html: "<b>PS4 が優先</b>です。PS4 がつながっている間は PC の速度指令(<code>V</code>)は無視されます。" },
-      { k: "i", html: "足回りの種類、各輪をどの基板で動かすかは<b>ビルド時の設定</b>(<code>robot_config.h</code>)です。画面の「robot_config.h 作成」タブで作れます。" },
+      { k: "i", html: "足回りの種類、各輪をどの基板で動かすかは<b>ビルド時の設定</b>(<code>config/robot_config.h</code>)です。画面の「robot_config.h 作成」タブで作れます。" },
     ],
   },
   {

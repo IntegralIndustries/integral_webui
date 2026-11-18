@@ -1,4 +1,4 @@
-// main_board の firmware/src/robot_config.h を、フォームから作る。
+// main_board の firmware/src/config/robot_config.h を、フォームから作る。
 // 足回りの種類や各輪をどの基板で動かすかは「ビルド時の設定」なので、実行中の基板には送れない。
 // そのため、コードを生成して、書き込み(pio run -t upload)の前に robot_config.h へ反映する。
 // 既存の robot_config.h を読み込めば、その中の該当する行だけを書き換えて、ほかの部分(ESC・サーボ・通信の設定など)はそのまま残す。
@@ -16,7 +16,9 @@ const DEFAULTS = {
   drive: "DRIVE_MECANUM4", radius: 0.05, lx: 0.15, ly: 0.15,
   pos: [[0.15, 0.15], [0.15, -0.15], [-0.15, 0.15], [-0.15, -0.15]],
   wheels: [0, 1, 2, 3].map((i) => ({ t: "bdcmd", id: 0, ch: i + 1, max: 60, enc: i + 1, encRatio: 1, inv: false, ratio: 1, off: 0 })),
-  steer: [0, 1, 2, 3].map((i) => ({ t: "none", id: 1, ch: i + 1, max: 0, enc: 1, encRatio: 1, inv: false, ratio: 1, off: 0 })),
+  // 操舵: lo / hi = 可動範囲 [rad](空 = 無制限)、rate = 最大速度 [rad/s](空 = 制限なし)、init = 電源投入時の操舵角(エンコーダなし)、
+  //       ep = 外部エンコーダのポート(0 = 使わない)、er = 比、ez = 操舵角 0 のときのエンコーダの角度、ei = 逆向き、et = 補正の時定数
+  steer: [0, 1, 2, 3].map((i) => ({ t: "none", id: 1, ch: i + 1, max: 0, enc: 1, encRatio: 1, inv: false, ratio: 1, off: 0, lo: "", hi: "", rate: "", init: 0, ep: 0, er: 1, ez: 0, ei: false, et: 0 })),
 };
 
 const F = (v) => { const n = +v; return (Number.isInteger(n) ? n.toFixed(1) : String(+n.toPrecision(6))) + "f"; };
@@ -37,7 +39,15 @@ export function actExpr(a) {
   }
   if (+a.ratio !== 1) s += `.ratio(${F(a.ratio)})`;
   if (a.inv) s += ".inv()";
-  if (+a.off !== 0 && (a.t.endsWith("Pos") || a.t === "servo")) s += `.offset(${F(a.off)})`;
+  const isPos = a.t.endsWith("Pos"), has = (v) => v !== "" && v != null && Number.isFinite(+v);
+  if (isPos && +(a.ep ?? 0) > 0) {   // 外部エンコーダ(電源投入時の操舵角を絶対角度で知る)
+    s += `.enc(${+a.ep}, ${F(a.er ?? 1)}).encZero(${F(a.ez ?? 0)})`;
+    if (a.ei) s += ".encInverted()";
+    if (+a.et > 0) s += `.encTrack(${F(a.et)})`;
+  } else if (isPos && has(a.init) && +a.init !== 0) s += `.initial(${F(a.init)})`;
+  if (a.t === "servo" && +a.off !== 0) s += `.offset(${F(a.off)})`;   // .offset はサーボだけ(BDCMD / HQDD は .initial か外部エンコーダ)
+  if ((isPos || a.t === "servo") && (has(a.lo) || has(a.hi))) s += `.limit(${has(a.lo) ? F(a.lo) : "-ANGLE_NO_LIMIT"}, ${has(a.hi) ? F(a.hi) : "ANGLE_NO_LIMIT"})`;
+  if ((isPos || a.t === "servo") && has(a.rate) && +a.rate > 0) s += `.maxRate(${F(a.rate)})`;
   return s;
 }
 
@@ -81,6 +91,17 @@ export function check(c) {
       if ((a.t === "bdcmdDuty" || a.t === "esc" || a.t === "escPid") && !(+a.max > 0)) w.push(`${lab}: 最高速度を指定してください`);
     }
   }
+  if (d[3]) for (let i = 0; i < d[2]; i++) {
+    const a = c.steer[i];
+    if (!(a.t.endsWith("Pos") || a.t === "servo")) continue;
+    const lo = a.lo === "" || a.lo == null ? null : +a.lo, hi = a.hi === "" || a.hi == null ? null : +a.hi;
+    if (lo != null && hi != null && lo >= hi) w.push(`操舵${i + 1}: 可動範囲の最小が最大以上です`);
+    if (lo != null && hi != null && hi - lo < Math.PI) w.push(`操舵${i + 1}: 可動範囲が 180° 未満です。届かない向きは、端まで回して車輪の速度を落とします`);
+    if (+(a.ep ?? 0) > 0) {
+      use(`ENC${a.ep}`, `操舵${i + 1} のエンコーダ`);
+      if (lo != null && hi != null && (hi - lo) * Math.abs(a.er ?? 1) > 2 * Math.PI) w.push(`操舵${i + 1}: 可動範囲 × エンコーダ比が 1 回転(2π)を超えています。起動時の角度を 1 回転分間違えます`);
+    } else if (a.t !== "servo" && +a.init === 0) w.push(`操舵${i + 1}: 外部エンコーダがないので、電源を入れるとき操舵を「角度 0(真っすぐ前)」にしておいてください(0 でなければ起動時の角度を指定)`);
+  }
   if (d[3]) w.push("独立ステアは、各輪が「駆動」と「操舵」の 2 つのアクチュエータを使います。操舵を「使わない」にすると向きが変わりません。");
   if (c.control === "CONTROL_PS4_ONLY") w.push("PS4 のみの設定では、Wi-Fi が使えません(この UI の UDP 接続も不可。USB シリアルなら使えます)。");
   return w;
@@ -96,7 +117,7 @@ export default function mount(root, ctx) {
       <div id="warns"></div>
       <pre class="out" id="out"></pre>
       <div class="row"><button class="pri" id="copy">コピー</button><button id="dl">ファイルとして保存</button></div>
-      <div class="small mute">反映先: <code>main_board/firmware/src/robot_config.h</code>。保存したら <code>cd firmware && pio run -t upload</code> で書き込みます。</div></div>
+      <div class="small mute">反映先: <code>main_board/firmware/src/config/robot_config.h</code>。保存したら <code>cd firmware && pio run -t upload</code> で書き込みます。</div></div>
     </div></div></div>`;
   const $ = (id) => root.querySelector("#" + id);
   const form = $("form");
@@ -110,7 +131,16 @@ export default function mount(root, ctx) {
     return `<tr data-kind="${kind}" data-i="${i}"><td>${kind === "wheels" ? "車輪" : "操舵"}${i + 1}</td>
       <td><select data-f="t">${opts(list, t)}</select></td>
       <td>${t === "none" ? "" : `${isB || isH ? "ID" : t === "servo" ? "サーボ" : "ESC"} ${num2("id", a.id)}${isB ? ` ch ${num2("ch", a.ch)}` : ""}${t === "bdcmdDuty" || t === "esc" || t === "escPid" ? ` 最高 ${num2("max", a.max, 56)} rad/s` : ""}${t === "escPid" ? ` ENC ${num2("enc", a.enc, 44)} 比 ${num2("encRatio", a.encRatio, 52)}` : ""}`}</td>
-      <td>${t === "none" ? "" : `<label><input type="checkbox" data-f="inv" ${a.inv ? "checked" : ""}>反転</label> 減速比 ${num2("ratio", a.ratio, 52)}${t.endsWith("Pos") || t === "servo" ? ` 前向き角 ${num2("off", a.off, 56)}rad` : ""}`}</td></tr>`;
+      <td>${t === "none" ? "" : `<label><input type="checkbox" data-f="inv" ${a.inv ? "checked" : ""}>反転</label> 減速比 ${num2("ratio", a.ratio, 52)}${t === "servo" ? ` サーボの 0 点 ${num2("off", a.off, 56)}rad` : ""}`}</td></tr>${detail()}`;
+    function nb(f, v, w) { return `<input type="number" data-f="${f}" value="${v ?? ""}" step="any" style="width:${w}px">`; }
+    function detail() {
+      if (kind !== "steer" || !(t.endsWith("Pos") || t === "servo")) return "";
+      const enc = isB || isH;
+      return `<tr data-kind="${kind}" data-i="${i}"><td></td><td colspan="3" class="small">
+        可動範囲 ${nb("lo", a.lo, 62)} 〜 ${nb("hi", a.hi, 62)} rad(空 = 無制限。例 ±1.7) 　最大速度 ${nb("rate", a.rate, 52)} rad/s
+        ${enc ? `<br>外部エンコーダ ENC ${nb("ep", a.ep ?? 0, 40)}(0 = 使わない)　比 ${nb("er", a.er ?? 1, 48)}　操舵角 0 のときの値 ${nb("ez", a.ez ?? 0, 62)} rad <label><input type="checkbox" data-f="ei" ${a.ei ? "checked" : ""}>逆向き</label>　補正 ${nb("et", a.et ?? 0, 44)} s
+          <br>${+(a.ep ?? 0) > 0 ? "電源を入れたときの操舵角を、エンコーダの絶対角度から求めます。「操舵角 0 のときの値」は、基板の Web UI の「今の位置を 0 にする」で登録できます。" : `電源を入れたときの操舵角 ${nb("init", a.init ?? 0, 56)} rad(エンコーダなしのとき)`}` : ""}</td></tr>`;
+    }
     function num2(f, v, w = 44) { return `<input type="number" data-f="${f}" value="${v}" step="any" style="width:${w}px">`; }
   }
 
@@ -139,8 +169,8 @@ export default function mount(root, ctx) {
       const a = c[tr.dataset.kind][+tr.dataset.i];
       tr.querySelectorAll("[data-f]").forEach((e) => (e.onchange = () => {
         const f = e.dataset.f;
-        a[f] = e.type === "checkbox" ? e.checked : e.type === "number" ? +e.value : e.value;
-        if (f === "t") render();
+        a[f] = e.type === "checkbox" ? e.checked : e.type === "number" ? (e.value === "" && (f === "lo" || f === "hi" || f === "rate") ? "" : +e.value) : e.value;
+        if (f === "t" || f === "ep") render();
         update();
       }));
     });

@@ -13,7 +13,7 @@ Integral のロボコン用基板 **HQDD1 / BDCMD_X1 / main_board / LDS01_ESP32*
 |---|---|---|
 | **[HQDD1](https://github.com/IntegralIndustries/hqdd1)** | CAN / UART | トルク・速度・位置の運転、PID・制限値の調整、フラッシュへの保存、出荷状態に戻す、高速キャプチャ(ステップ応答)、リアルタイムグラフ |
 | **[BDCMD_X1](https://github.com/IntegralIndustries/bdcmd_x1)** | CAN / UART | 4ch それぞれのモード(デューティ / 速度 / 位置)と目標、基板全体と ch ごとのパラメータ、状態フラグ、保存、グラフ |
-| **[main_board](https://github.com/IntegralIndustries/main_board)** | USB / Wi-Fi(UDP) | 足回りの操縦(円・キーボード)、非常停止、サーボ・ESC・モーターの出力、CAN の中継、状態グラフ、**`robot_config.h` の作成** |
+| **[main_board](https://github.com/IntegralIndustries/main_board)** | USB / Wi-Fi(UDP) | 足回りの操縦(円・キーボード)、非常停止、サーボ・ESC・モーターの出力、CAN の中継、状態グラフ、**Wi-Fi の接続先の設定(USB)、エンコーダの数値表示、`robot_config.h` の作成(独立ステアの可動範囲・外部エンコーダを含む)** |
 | **[LDS01_ESP32](https://github.com/IntegralIndustries/lds01_esp32)** | Wi-Fi(UDP) / UART / CAN | LiDAR の点群(360°)と 8 方向の最短距離の表示、START / STOP、**`config.h` の作成** |
 | **全基板(CAN バス)** | CAN | バスにいる基板と ID の一覧、流れているフレームの表示、全基板への非常停止 |
 
@@ -35,9 +35,20 @@ Integral のロボコン用基板 **HQDD1 / BDCMD_X1 / main_board / LDS01_ESP32*
 | BDCMD_X1 | USB DFU(WebUSB、DfuSe をこのリポジトリで実装) | SW1 を押したまま USB をつなぐ。`firmware.bin` を 0x08000000 へ。新しい基板は、書き込み後にオプションバイトの変更が必要(画面にも出ます) |
 | HQDD1 | 非対応 | USB がないので ST-Link(SWD)で書き込む |
 
-ファイルは、`pio run` でできる `.pio/build/<env>/*.bin` を選ぶか、各リポジトリの GitHub リリースから取得します(リリースを作ると「GitHub のリリースから取得」で選べます)。書き込む前に、ファイルの種類(ESP32 は先頭 0xE9、STM32 はスタックポインタとリセットベクタ)を確認し、確認ダイアログを出します。esptool-js は jsDelivr の CDN から読み込みます(オフラインでは ESP32 の書き込みは使えません)。
+「同梱の…」ボタンは、このリポジトリの `static/firmware/` に入れてあるビルド済みファイルを使います(PC にファイルを用意しなくても書き込めます)。自分でビルドしたものを使うときは、`pio run` でできる `.pio/build/<env>/*.bin` を選ぶか、各リポジトリの GitHub リリースから取得します(リリースを作ると「GitHub のリリースから取得」で選べます)。書き込む前に、ファイルの種類(ESP32 は先頭 0xE9、STM32 はスタックポインタとリセットベクタ)を確認し、確認ダイアログを出します。esptool-js は jsDelivr の CDN から読み込みます(オフラインでは ESP32 の書き込みは使えません)。
 
 > DFU の書き込みは、実機のない環境で、DfuSe の手順を真似たモックでテストしています。実機での確認はまだです。うまくいかないときは、`dfu-util` や STM32CubeProgrammer と同じ結果になるか比べてください。
+
+### 同梱のファームウェアを更新する
+
+各基板リポジトリ(main_board / lds01_esp32 / bdcmd_x1)の GitHub Actions「Build firmware」が作った最新のビルドを取り込みます。基板のファームウェアを更新したら、Actions で「Build firmware」を実行(または `v*` のタグを push)してから、`gh auth login` 済みの PC で:
+
+```bash
+python3 tools/update_firmware.py     # static/firmware/ を更新(manifest.json にコミットの版が入る)
+git add static/firmware && git commit -m "同梱のファームウェアを更新" && git push
+```
+
+同梱のものは**既定の設定**(main_board は足回りがメカナム 4 輪、LDS01_ESP32 は ID 0)でビルドされています。ロボットに合わせた設定が要るときは、「robot_config.h 作成」で作って、自分でビルドしてください。main_board の Wi-Fi は、書き込んだあと「Wi-Fi 設定」(USB)で接続先を保存します。
 
 ## 使い方
 

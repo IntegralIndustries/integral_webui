@@ -51,6 +51,38 @@ async function releasePicker(container, repo, exts, onPick, log) {
   };
 }
 
+/**
+ * このページに同梱したビルド済みファームウェア(static/firmware/<基板>/。tools/update_firmware.py で更新)。
+ * PC にファイルを用意しなくても、ボタン 1 つで書き込む候補に入る。groups = [[ボタンの名前, ファイル名の配列], ...]
+ */
+async function builtinPicker(container, repo, groups, onPick, log) {
+  let m;
+  try {
+    const r = await fetch("firmware/manifest.json", { cache: "no-cache" });
+    if (!r.ok) return;
+    m = (await r.json())[repo];
+  } catch { return; }
+  if (!m) return;
+  const box = el("div", { class: "row" }, [el("span", { class: "small mute" }, `同梱(${repo} ${m.commit}、${String(m.built).slice(0, 10)} ビルド。ロボットごとの設定は既定のまま):`)]);
+  for (const [label, names] of groups) {
+    const files = names.filter((n) => m.files.includes(n));
+    if (!files.length) continue;
+    const b = el("button", { type: "button", class: "pri" }, label);
+    b.onclick = async () => {
+      try {
+        for (const f of files) {
+          const res = await fetch(`firmware/${repo}/${f}`);
+          if (!res.ok) throw new Error(`${f}: HTTP ${res.status}`);
+          onPick(new File([await res.blob()], f));
+        }
+        log(`同梱の ${files.join(" / ")} を追加しました`);
+      } catch (e) { log("同梱のファイルを取得できません: " + e.message, "err"); }
+    };
+    box.append(b);
+  }
+  container.append(box);
+}
+
 // =====================================================================
 // ESP32
 // =====================================================================
@@ -61,7 +93,7 @@ export function espFlasher(repo) {
     const F = frame(root, {
       title: "ESP32 にファームウェアを書き込む",
       intro: `USB ケーブルで PC につなぎ(main_board は USB-C、LDS01_ESP32 は DevKit の USB。DevKit は基板から外してもよい)、
-        書き込むファイルを選んで「書き込む」。ファイルは <code>cd firmware && pio run</code> のあと <code>.pio/build/&lt;env&gt;/</code> にできます。
+        <b>「同梱の…」ボタンを押せば、ファイルの用意は要りません</b>(ロボットごとの設定は既定のままのビルド)。自分でビルドしたものを使うときは、ファイルを選んで「書き込む」。ファイルは <code>cd firmware && pio run</code> のあと <code>.pio/build/&lt;env&gt;/</code> にできます。
         <b>firmware.bin だけ</b>なら 0x10000 に書きます(すでに動いている基板の更新)。<b>新品の ESP32</b> は <code>bootloader.bin</code>(0x1000)、<code>partitions.bin</code>(0x8000)、<code>boot_app0.bin</code>(0xe000)も一緒に選びます(ファイル名からアドレスを自動で入れます)。`,
       warn: "書き込み中は電源・USB を抜かないでください。この画面の接続(USB シリアル)は、先に「切断」してください(同じポートを 2 か所で開けません)。",
     });
@@ -79,6 +111,7 @@ export function espFlasher(repo) {
     const erase = el("input", { type: "checkbox" });
     const go = el("button", { type: "button", class: "pri" }, "書き込む");
     F.body.append(el("div", { class: "row" }, [el("button", { type: "button", onclick: () => pick.click() }, ".bin を選ぶ(複数可)"), pick, el("label", {}, ["書き込み速度 ", baud]), el("label", {}, [erase, "全消去してから書く"])]), list);
+    builtinPicker(F.body, repo, [["同梱の firmware.bin(更新)", ["firmware.bin"]], ["同梱の一式(新品の ESP32)", ["bootloader.bin", "partitions.bin", "boot_app0.bin", "firmware.bin"]]], addRow, F.log);
     releasePicker(F.body, repo, [".bin"], addRow, F.log);
     F.body.append(el("div", { class: "row" }, [go]));
 
@@ -243,6 +276,7 @@ export function dfuFlasher(repo) {
     pick.onchange = () => { if (pick.files[0]) set(pick.files[0]); };
     const go = el("button", { type: "button", class: "pri" }, "USB デバイスを選んで書き込む");
     F.body.append(el("div", { class: "row" }, [el("button", { type: "button", onclick: () => pick.click() }, "firmware.bin を選ぶ"), pick, name]));
+    builtinPicker(F.body, repo, [["同梱の firmware.bin を使う", ["firmware.bin"]]], set, F.log);
     releasePicker(F.body, repo, [".bin"], set, F.log);
     F.body.append(el("div", { class: "row" }, [go]));
 

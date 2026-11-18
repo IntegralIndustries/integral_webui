@@ -102,7 +102,15 @@ test("CAN ID の分類(can_id_map.md)", () => {
 
 test("robot_config.h の生成", () => {
   assert.equal(actExpr({ t: "bdcmd", id: 0, ch: 2, ratio: 19, inv: true }), "Act::bdcmd(0, 2).ratio(19.0f).inv()");
-  assert.equal(actExpr({ t: "bdcmdPos", id: 1, ch: 1, ratio: 1, inv: false, off: 0.12 }), "Act::bdcmdPos(1, 1).offset(0.12f)");
+  // .offset はサーボだけ。BDCMD / HQDD の位置は .initial か外部エンコーダ
+  assert.equal(actExpr({ t: "bdcmdPos", id: 1, ch: 1, ratio: 1, inv: false, off: 0.12 }), "Act::bdcmdPos(1, 1)");
+  assert.equal(actExpr({ t: "servo", id: 1, ratio: 1, inv: false, off: 0.12 }), "Act::servo(1).offset(0.12f)");
+  assert.equal(actExpr({ t: "bdcmdPos", id: 1, ch: 1, ratio: 1, inv: false, init: 0.5 }), "Act::bdcmdPos(1, 1).initial(0.5f)");
+  // 操舵: 外部エンコーダ(.initial は使わない)、可動範囲、速さ
+  assert.equal(actExpr({ t: "hqddPos", id: 2, ratio: 1, inv: false, ep: 3, er: 1, ez: 1.23, ei: true, et: 5, init: 0.5, lo: -1.7, hi: 1.7, rate: 4 }),
+    "Act::hqddPos(2).enc(3, 1.0f).encZero(1.23f).encInverted().encTrack(5.0f).limit(-1.7f, 1.7f).maxRate(4.0f)");
+  assert.equal(actExpr({ t: "hqddPos", id: 2, ratio: 1, inv: false, lo: "", hi: 1.5, rate: "" }), "Act::hqddPos(2).limit(-ANGLE_NO_LIMIT, 1.5f)");
+  assert.equal(actExpr({ t: "hqddPos", id: 2, ratio: 1, inv: false }), "Act::hqddPos(2)", "古い保存データ(新しい項目なし)でも壊れない");
   assert.equal(actExpr({ t: "escPid", id: 1, max: 60, enc: 1, encRatio: 1, ratio: 1 }), "Act::escPid(1, 60.0f, 1, 1.0f)");
   const c = { control: "CONTROL_AUTO", mac: "aa:bb", maxvx: 1, maxvy: 1, maxwz: 3, normal: 0.5, slow: 0.2, drive: "DRIVE_MECANUM4", radius: 0.05, lx: 0.15, ly: 0.15,
     pos: [[0.15, 0.15], [0.15, -0.15], [-0.15, 0.15], [-0.15, -0.15]],
@@ -115,16 +123,18 @@ test("robot_config.h の生成", () => {
 });
 
 test("robot_config.h: 実物のファイルのすべての項目を書き換えられる(隣のリポジトリがあるときだけ)", async (t) => {
-  const fs = await import("node:fs"), path = new URL("../../main_board/firmware/src/robot_config.h", import.meta.url);
+  const fs = await import("node:fs"), path = new URL("../../main_board/firmware/src/config/robot_config.h", import.meta.url);
   if (!fs.existsSync(path)) return t.skip("main_board リポジトリが隣にない");
   const src = fs.readFileSync(path, "utf8");
   const c = { control: "CONTROL_PC_ONLY", mac: "aa:bb:cc:dd:ee:ff", maxvx: 1.5, maxvy: 1, maxwz: 3, normal: 0.5, slow: 0.2, drive: "DRIVE_SWERVE4", radius: 0.05, lx: 0.15, ly: 0.15,
     pos: [[0.15, 0.15], [0.15, -0.15], [-0.15, 0.15], [-0.15, -0.15]], wheels: [1, 2, 3, 4].map((i) => ({ t: "esc", id: i, max: 60, ratio: 1, inv: false, off: 0 })),
-    steer: [1, 2, 3, 4].map((i) => ({ t: "bdcmdPos", id: 1, ch: i, ratio: 1, inv: false, off: 0 })) };
+    steer: [1, 2, 3, 4].map((i) => ({ t: "hqddPos", id: i, ratio: 1, inv: false, ep: i, er: 1, ez: 0.5, lo: -1.7, hi: 1.7 })) };
   let out = src;
   for (const [re, rep] of buildParts(c)) { assert.match(out, re, "見つからない: " + rep.split("\n")[0]); out = out.replace(re, rep); }
   assert.match(out, /constexpr DriveType DRIVE_TYPE = DRIVE_SWERVE4;/);
   assert.ok(out.includes("ESC_CAL"), "ほかの部分は残る");
+  assert.match(out, /Act::hqddPos\(4\)\.enc\(4, 1\.0f\)\.encZero\(0\.5f\)\.limit\(-1\.7f, 1\.7f\),/);
+  assert.deepEqual(check(c).filter((x) => /重複|1 回転/.test(x)), [], "ENC 1〜4 が別々なら重複なし");
 });
 
 // ---------------- DFU(STM32 の USB 書き込み)。実機が無いので、DfuSe の状態遷移を真似たモックで確かめる ----------------

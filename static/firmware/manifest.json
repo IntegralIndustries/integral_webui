@@ -1,0 +1,32 @@
+{
+  "main_board": {
+    "files": [
+      "boot_app0.bin",
+      "bootloader.bin",
+      "firmware.bin",
+      "partitions.bin"
+    ],
+    "commit": "3ab7ccd",
+    "built": "2026-11-18T13:05:17Z",
+    "run": 44310157488
+  },
+  "lds01_esp32": {
+    "files": [
+      "boot_app0.bin",
+      "bootloader.bin",
+      "firmware.bin",
+      "partitions.bin"
+    ],
+    "commit": "879fd21",
+    "built": "2026-11-18T12:44:55Z",
+    "run": 44306875223
+  },
+  "bdcmd_x1": {
+    "files": [
+      "firmware.bin"
+    ],
+    "commit": "f6ac5cc",
+    "built": "2026-11-18T12:44:58Z",
+    "run": 44306883523
+  }
+}
