@@ -111,7 +111,7 @@ export function espFlasher(repo) {
     const erase = el("input", { type: "checkbox" });
     const go = el("button", { type: "button", class: "pri" }, "書き込む");
     F.body.append(el("div", { class: "row" }, [el("button", { type: "button", onclick: () => pick.click() }, ".bin を選ぶ(複数可)"), pick, el("label", {}, ["書き込み速度 ", baud]), el("label", {}, [erase, "全消去してから書く"])]), list);
-    builtinPicker(F.body, repo, [["同梱の firmware.bin(更新)", ["firmware.bin"]], ["同梱の一式(新品の ESP32)", ["bootloader.bin", "partitions.bin", "boot_app0.bin", "firmware.bin"]]], addRow, F.log);
+    builtinPicker(F.body, repo, [["同梱の一式(新品の ESP32・初めて書くとき)", ["bootloader.bin", "partitions.bin", "boot_app0.bin", "firmware.bin"]], ["同梱の firmware.bin だけ(すでに書いてある基板の更新)", ["firmware.bin"]]], addRow, F.log);
     releasePicker(F.body, repo, [".bin"], addRow, F.log);
     F.body.append(el("div", { class: "row" }, [go]));
 
@@ -125,6 +125,11 @@ export function espFlasher(repo) {
         if (!(addr >= 0)) return F.log(`${r.file.name}: アドレスが正しくありません`, "err");
         if (addr === 0x10000 && u8[0] !== 0xe9) return F.log(`${r.file.name}: ESP32 のアプリのイメージではありません(先頭が 0xE9 でない)。firmware.bin を選んでいますか?`, "err");
         files.push({ data: toBinString(u8), address: addr, name: r.file.name });
+      }
+      // 新品の ESP32(標準のパーティション)は、アプリの領域が約 1.3MB。それを超えるファームは、partitions.bin も書かないと起動しない
+      const big = files.find((f) => f.address === 0x10000 && f.data.length > 0x140000);
+      if (big && !files.some((f) => f.address === 0x8000)) {
+        if (!confirm(`${big.name} は ${(big.data.length / 1048576).toFixed(2)} MB あります。新品の ESP32(標準のパーティション)は約 1.3 MB までしか入らず、firmware.bin だけでは起動しません。\n\npartitions.bin(0x8000)なしで続けますか?(すでに同じファームを書いた基板の更新なら OK)`)) return;
       }
       if (!confirm(`${files.map((f) => `${f.name} → ${hex(f.address)}`).join("\n")}\n\nを書き込みます。続けますか?`)) return;
       go.disabled = true; F.progress(0);

@@ -116,6 +116,7 @@ export default {
 
     // ---------- 受信 ----------
     function onLine(line) {
+      st.got = true;   // 何か返ってきた(接続できている)
       if (/^e( \d=|$)/.test(line)) {   // E の応答: e 1=1.2345 2=nan ...
         for (const [, n, v] of line.matchAll(/(\d)=(-?[\d.]+|nan)/g)) encV.abs[+n - 1] = v === "nan" ? NaN : +v;
         drawEnc(); ctx.markRx(); return;
@@ -249,14 +250,24 @@ export default {
 
     return {
       onConnect() {
-        st.t0 = performance.now(); st.en = null; st.telem = true;
-        if (ctx.conn().mode === "udp") send("H", true);   // UDP の返事の宛先として登録
-        setTimeout(() => send("?", true), 150);
-        setTimeout(() => send("T 1", true), 300);
+        st.t0 = performance.now(); st.en = null; st.telem = true; st.got = false;
+        // USB シリアルをつなぐと、基板が自動でリセットされて(DTR / RTS)、約 1〜2 秒は返事ができない。
+        // 返事があるまで、0.8 秒ごとに(最大 12 回)送り直す
+        let n = 0;
+        const tryHello = () => {
+          if (st.got || !tr.connected || ++n > 12) {
+            if (!st.got && tr.connected) log.err("基板から返事がありません。ポート・ボーレート(115200)・書き込みが成功したか(新品の ESP32 は「一式」)を確認してください");
+            return;
+          }
+          if (ctx.conn().mode === "udp") send("H", true);   // UDP の返事の宛先として登録
+          send("?", true); send("T 1", true);
+          st.helloTimer = setTimeout(tryHello, 800);
+        };
+        st.helloTimer = setTimeout(tryHello, 300);
       },
-      onDisconnect() {},
+      onDisconnect() { clearTimeout(st.helloTimer); },
       destroy() {
-        clearInterval(driveTimer); offs.forEach((f) => f()); charts.destroy();
+        clearTimeout(st.helloTimer); clearInterval(driveTimer); offs.forEach((f) => f()); charts.destroy();
         document.removeEventListener("keydown", onKeyDown); document.removeEventListener("keyup", onKeyUp); removeEventListener("blur", onBlur);
       },
     };
