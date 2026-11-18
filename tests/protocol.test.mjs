@@ -1,0 +1,128 @@
+// node --test tests/   (Node 18 以上。依存パッケージなし)
+import test from "node:test";
+import assert from "node:assert/strict";
+import * as P from "../static/js/protocol.js";
+import { actExpr, buildParts, check } from "../static/js/boards/main_board_config.js";
+
+const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, `${a} != ${b}`);
+
+test("HQDD1: CAN テレメトリ(docs の例 B6 FF 00 00 01 00 01 00)", () => {
+  const m = P.hqddDecodeCan(0x201, [0xb6, 0xff, 0, 0, 1, 0, 1, 0], 1);
+  near(m.sa, -0.074); assert.equal(m.v, 0); near(m.iq, 0.001); near(m.trq, 0.001);
+  assert.equal(P.hqddDecodeCan(0x202, [0, 0, 0, 0, 0, 0, 0, 0], 1), null, "別の ID は無視");
+});
+
+test("HQDD1: CAN 応答(?VP -> 0.03)と WS / FR", () => {
+  const m = P.hqddDecodeCan(0x301, [0x56, 0x50, 0x01, 0x00, 0x8f, 0xc2, 0xf5, 0x3c], 1);
+  assert.equal(m.type, "gain"); assert.equal(m.name, "VP"); near(m.value, 0.03, 1e-5);
+  assert.deepEqual(P.hqddDecodeCan(0x301, [0x57, 0x53, 1, 0, 0, 0, 0, 0], 1), { type: "saved", status: 1 });
+  assert.deepEqual(P.hqddDecodeCan(0x301, [0x46, 0x52, 2, 0, 0, 0, 0, 0], 1), { type: "reset", status: 2 });
+});
+
+test("HQDD1: UART の行", () => {
+  assert.deepEqual(P.splitPrefix("#1 v=0.00 tgt=0"), { id: 1, text: "v=0.00 tgt=0" });
+  assert.deepEqual(P.splitPrefix("Target: 3"), { id: null, text: "Target: 3" });
+  const t = P.hqddDecodeLine("v=0.00 tgt=0.00 Iq=0.01 Id=0.00 Vq=0.09 sa=2.04 trq=0.0057 loopHz=2000");
+  assert.equal(t.type, "telem"); near(t.sa, 2.04); near(t.trq, 0.0057); assert.equal(t.hz, 2000);
+  assert.deepEqual(P.hqddDecodeLine("GAIN VP 0.03000"), { type: "gain", name: "VP", value: 0.03 });
+  assert.deepEqual(P.hqddDecodeLine("SAVE BUSY (回転中)"), { type: "saved", status: 2 });
+  assert.deepEqual(P.hqddDecodeLine("RESET OK"), { type: "reset", status: 1 });
+});
+
+test("BDCMD_X1: ch テレメトリ(0x400 + ID×4 + ch-1)", () => {
+  // 位置 1.23 rad、速度 3.14、電流 250 mA、デューティ 12.5 %
+  const d = [123, 0, 0x3a, 0x01, 250, 0, 125, 0];
+  const m = P.bdcmdDecodeCan(0x400 + 2 * 4 + 1, d, 2);
+  assert.equal(m.ch, 2); near(m.p, 1.23); near(m.v, 3.14); near(m.i, 0.25); near(m.d, 12.5);
+  assert.equal(P.bdcmdDecodeCan(0x400 + 2 * 4 + 1, d, 1), null);
+  const neg = P.bdcmdDecodeCan(0x400, [0x85, 0xff, 0, 0, 0, 0, 0x18, 0xfc], 0);   // -123 → -1.23 rad、-1000 → -100 %
+  near(neg.p, -1.23); near(neg.d, -100);
+});
+
+test("BDCMD_X1: 状態(0x220 + ID)とフラグ", () => {
+  const m = P.bdcmdDecodeCan(0x220, [0x80, 0x2e, 0b1001000, 0b00_10_01_00, 0b0011_1111, 0, 0, 0], 0);   // 11.904 V
+  near(m.vb, 11.904); assert.deepEqual(P.flagNames(m.fl), ["ESTOP", "ID_CONFLICT"]);
+  assert.deepEqual(m.modes, [0, 1, 2, 0]); assert.deepEqual(m.en, [true, true, true, true]); assert.deepEqual(m.enc, [true, true, false, false]);
+});
+
+test("BDCMD_X1: 応答(ch 付き)と 0x140 の目標値フレーム", () => {
+  const r = P.bdcmdDecodeCan(0x320, [0x56, 0x50, 1, 3, 0, 0, 0xa0, 0x40], 0);   // 5.0
+  assert.deepEqual([r.type, r.name], ["gain", "3VP"]); near(r.value, 5);
+  assert.deepEqual(P.bdcmdTargetFrame([50, -1.57, null, 0], [10, 100, 100, 10]), [0xf4, 0x01, 0x63, 0xff, 0x00, 0x80, 0, 0]);
+});
+
+test("BDCMD_X1: UART テレメトリ", () => {
+  const m = P.bdcmdDecodeLine("vb=11.92 fl=0 | 1:m=1 d=12.0 p=1.234 v=0.50 i=0.31 | 2:m=0 d=-5.0 p=0.0 v=0.0 i=0.0");
+  assert.equal(m.type, "uart-telem"); near(m.vb, 11.92); assert.equal(m.chs[0].m, 1); near(m.chs[0].p, 1.234); near(m.chs[1].d, -5); assert.equal(m.chs[2], undefined);
+  assert.deepEqual(P.bdcmdDecodeLine("GAIN 1VE 4.98"), { type: "gain", name: "1VE", value: 4.98 });
+});
+
+test("数値の整形(CAN の 8 文字制限)", () => {
+  assert.equal(P.fmtNum(0.0149999, 8), "0.015");
+  assert.equal(P.fmtNum(12.5, 4), "12.5");
+  assert.equal(P.fmtNum(0.0123456, 4), "0.01");
+  assert.ok(P.fmtNum(1 / 3, 6).length <= 6);
+});
+
+test("main_board: 状態行・情報行・CAN 転送", () => {
+  const t = P.mainDecodeLine("t ms=12345 vb=11.92 es=0 en=1 src=PC v=0.50,0.00,0.30 w=10.2,9.8,10.2,9.8 s=0.00 enc=1.23,nan,0.5,nan,nan,nan,nan gz=0.012");
+  assert.equal(t.type, "telem"); assert.equal(t.src, "PC"); assert.deepEqual(t.v, [0.5, 0, 0.3]); assert.equal(t.enc[1], null); near(t.gz, 0.012);
+  const i = P.mainDecodeLine("i main_board fw 1.0.0 drive=1 wheels=4 vb=11.92 cells=3 estop=0x0 wifi=1 ps4=0 can=1 ip=192.168.1.40");
+  assert.equal(i.fields.cells, "3"); assert.equal(i.fields.ip, "192.168.1.40");
+  assert.deepEqual(P.mainDecodeLine("c 401 2C010A0000000000"), { type: "can", id: 0x401, data: [0x2c, 1, 0x0a, 0, 0, 0, 0, 0] });
+});
+
+test("LDS: パケットの解釈、角度の向き、8 方向", () => {
+  const n = 360, b = new Uint8Array(1456), dv = new DataView(b.buffer);
+  b.set([0x4c, 0x44, 0x53, 0x31]); dv.setUint32(4, 7, true); dv.setUint16(8, 3002, true); dv.setUint16(10, 11900, true); dv.setUint16(12, n, true); dv.setUint16(14, 1, true);
+  const put = (i, mm) => dv.setUint16(16 + i * 2, mm, true);
+  put(0, 1000);     // i=0 は ROS の ranges[359] = -1°(ほぼ前)
+  put(270, 800);    // 359-270 = 89° = 左
+  put(180, 500);    // 179° = 後ろ
+  put(5, 50);       // 近すぎ → 無効
+  const p = P.ldsDecodePacket(b);
+  assert.equal(p.seq, 7); near(p.rpm, 300.2); near(p.vb, 11.9); assert.ok(p.complete);
+  assert.equal(P.ldsAngle(0), 359); assert.equal(P.ldsAngle(270), 89);
+  assert.deepEqual(P.ldsSectors(p.dist), [1000, 0, 800, 0, 500, 0, 0, 0]);
+  assert.equal(P.ldsDecodePacket(new Uint8Array(1456)), null, "ヘッダが違う");
+});
+
+test("LDS: CAN と UART", () => {
+  assert.deepEqual(P.ldsDecodeCan(0x188, [1, 0, 2, 0, 3, 0, 4, 0], 0), { type: "sectors", base: 4, values: [1, 2, 3, 4] });
+  assert.deepEqual(P.ldsDecodeLine("s rpm=300.2 d=812,0,1520,3011,0,0,642,903"), { type: "sectors8", rpm: 300.2, values: [812, 0, 1520, 3011, 0, 0, 642, 903] });
+});
+
+test("CAN ID の分類(can_id_map.md)", () => {
+  assert.deepEqual(P.classifyCan(0x001), { board: "all", what: "非常停止" });
+  assert.equal(P.classifyCan(0x203).board, "hqdd1"); assert.equal(P.classifyCan(0x203).dev, 3);
+  assert.equal(P.classifyCan(0x41d).board, "bdcmd_x1"); assert.equal(P.classifyCan(0x41d).dev, 7);
+  assert.equal(P.classifyCan(0x188 + 2).dev, 2);
+  assert.equal(P.classifyCan(0x7ff).board, null);
+});
+
+test("robot_config.h の生成", () => {
+  assert.equal(actExpr({ t: "bdcmd", id: 0, ch: 2, ratio: 19, inv: true }), "Act::bdcmd(0, 2).ratio(19.0f).inv()");
+  assert.equal(actExpr({ t: "bdcmdPos", id: 1, ch: 1, ratio: 1, inv: false, off: 0.12 }), "Act::bdcmdPos(1, 1).offset(0.12f)");
+  assert.equal(actExpr({ t: "escPid", id: 1, max: 60, enc: 1, encRatio: 1, ratio: 1 }), "Act::escPid(1, 60.0f, 1, 1.0f)");
+  const c = { control: "CONTROL_AUTO", mac: "aa:bb", maxvx: 1, maxvy: 1, maxwz: 3, normal: 0.5, slow: 0.2, drive: "DRIVE_MECANUM4", radius: 0.05, lx: 0.15, ly: 0.15,
+    pos: [[0.15, 0.15], [0.15, -0.15], [-0.15, 0.15], [-0.15, -0.15]],
+    wheels: [1, 2, 3, 4].map((ch) => ({ t: "bdcmd", id: 0, ch, ratio: 1, inv: false, off: 0 })), steer: [1, 2, 3, 4].map(() => ({ t: "none" })) };
+  const txt = buildParts(c).map((p) => p[1]).join("\n");
+  assert.match(txt, /DRIVE_TYPE = DRIVE_MECANUM4;/); assert.match(txt, /Act::bdcmd\(0, 4\),/);
+  assert.deepEqual(check(c), []);
+  c.wheels[1].ch = 1;
+  assert.match(check(c).join(), /重複/);
+});
+
+test("robot_config.h: 実物のファイルのすべての項目を書き換えられる(隣のリポジトリがあるときだけ)", async (t) => {
+  const fs = await import("node:fs"), path = new URL("../../main_board/firmware/src/robot_config.h", import.meta.url);
+  if (!fs.existsSync(path)) return t.skip("main_board リポジトリが隣にない");
+  const src = fs.readFileSync(path, "utf8");
+  const c = { control: "CONTROL_PC_ONLY", mac: "aa:bb:cc:dd:ee:ff", maxvx: 1.5, maxvy: 1, maxwz: 3, normal: 0.5, slow: 0.2, drive: "DRIVE_SWERVE4", radius: 0.05, lx: 0.15, ly: 0.15,
+    pos: [[0.15, 0.15], [0.15, -0.15], [-0.15, 0.15], [-0.15, -0.15]], wheels: [1, 2, 3, 4].map((i) => ({ t: "esc", id: i, max: 60, ratio: 1, inv: false, off: 0 })),
+    steer: [1, 2, 3, 4].map((i) => ({ t: "bdcmdPos", id: 1, ch: i, ratio: 1, inv: false, off: 0 })) };
+  let out = src;
+  for (const [re, rep] of buildParts(c)) { assert.match(out, re, "見つからない: " + rep.split("\n")[0]); out = out.replace(re, rep); }
+  assert.match(out, /constexpr DriveType DRIVE_TYPE = DRIVE_SWERVE4;/);
+  assert.ok(out.includes("ESC_CAL"), "ほかの部分は残る");
+});
