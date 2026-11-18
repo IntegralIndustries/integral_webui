@@ -3,6 +3,7 @@ import { CAN, bdcmdDecodeCan, bdcmdDecodeLine, bdcmdTargetFrame, splitPrefix, to
 import { ChartBoard } from "../chart.js";
 import { LogPanel, ParamEditor, el, esc } from "../ui.js";
 import { uartSelect, uartAutoDetector } from "./common.js";
+import { dfuFlasher } from "./flasher.js";
 
 const MODES = ["デューティ", "速度", "位置"];
 const MODE_UNIT = ["%", "rad/s", "rad"];
@@ -91,6 +92,7 @@ function stopCmds(conn) {
 export default {
   id: "bdcmd_x1",
   stopCmds,
+  extraTabs: [{ id: "flash", label: "ファームウェア書き込み", mount: dfuFlasher("bdcmd_x1") }],
 
   create(ctx) {
     const root = ctx.root;

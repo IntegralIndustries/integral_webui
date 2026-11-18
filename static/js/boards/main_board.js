@@ -3,6 +3,7 @@ import { mainDecodeLine, classifyCan, hex, toBytes } from "../protocol.js";
 import { ChartBoard } from "../chart.js";
 import { LogPanel, el } from "../ui.js";
 import configTab from "./main_board_config.js";
+import { espFlasher } from "./flasher.js";
 
 const SERIES = {
   vx: ["vx(前)", "m/s", 0], vy: ["vy(左)", "m/s", 1], wz: ["wz(旋回)", "rad/s", 2],
@@ -70,7 +71,7 @@ const stopCmds = () => [{ text: "V 0 0 0" }, { text: "D 0" }, { text: "T 0" }];
 export default {
   id: "main_board",
   stopCmds(conn) { return conn.mode === "udp" ? stopCmds().map((t) => ({ kind: "udp", ...t })) : stopCmds().map((t) => ({ kind: "uart", ...t })); },
-  extraTabs: [{ id: "config", label: "robot_config.h 作成", mount: configTab }],
+  extraTabs: [{ id: "config", label: "robot_config.h 作成", mount: configTab }, { id: "flash", label: "ファームウェア書き込み", mount: espFlasher("main_board") }],
 
   create(ctx) {
     const root = ctx.root;

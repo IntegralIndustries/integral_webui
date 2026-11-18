@@ -2,6 +2,7 @@
 import { CAN, ldsDecodePacket, ldsDecodeCan, ldsDecodeLine, ldsSectors, ldsAngle, LDS_SECTORS } from "../protocol.js";
 import { LogPanel, el } from "../ui.js";
 import configTab from "./lds01_config.js";
+import { espFlasher } from "./flasher.js";
 
 const TEMPLATE = `
 <main class="grid">
@@ -37,7 +38,7 @@ const heat = (t) => { t = Math.max(0, Math.min(1, t)); return `hsl(${240 - 240 *
 export default {
   id: "lds01_esp32",
   stopCmds: () => [],   // UDP は SUB が途切れれば止まる。CAN / UART は受信だけ
-  extraTabs: [{ id: "config", label: "config.h 作成", mount: configTab }],
+  extraTabs: [{ id: "config", label: "config.h 作成", mount: configTab }, { id: "flash", label: "ファームウェア書き込み", mount: espFlasher("lds01_esp32") }],
 
   create(ctx) {
     const root = ctx.root;

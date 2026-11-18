@@ -3,6 +3,7 @@ import { CAN, hqddDecodeCan, hqddDecodeLine, splitPrefix, toBytes } from "../pro
 import { ChartBoard } from "../chart.js";
 import { LogPanel, ParamEditor } from "../ui.js";
 import { uartSelect, uartAutoDetector } from "./common.js";
+import { noFlash } from "./flasher.js";
 
 const SERIES = {
   v: ["実速度", "rad/s", 0], tgt_v: ["目標(速度)", "rad/s", 1, 1],
@@ -94,6 +95,7 @@ function stopCmds(conn) {
 export default {
   id: "hqdd1",
   stopCmds,
+  extraTabs: [{ id: "flash", label: "ファームウェア書き込み", mount: noFlash("<b>HQDD1 は、この画面からは書き込めません。</b>基板に USB コネクタがなく、ブートローダの UART のピンも使っていないため、書き込みは <b>ST-Link(J2 の SWDIO / SWCLK / GND)</b>で行います。手順は hqdd1 リポジトリの README(<code>pio run -t upload</code>。新しい基板では、先にオプションバイトの修正が必要)にあります。") }],
 
   create(ctx) {
     const root = ctx.root;

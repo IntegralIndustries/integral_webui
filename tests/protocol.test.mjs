@@ -126,3 +126,41 @@ test("robot_config.h: 実物のファイルのすべての項目を書き換え�
   assert.match(out, /constexpr DriveType DRIVE_TYPE = DRIVE_SWERVE4;/);
   assert.ok(out.includes("ESC_CAL"), "ほかの部分は残る");
 });
+
+// ---------------- DFU(STM32 の USB 書き込み)。実機が無いので、DfuSe の状態遷移を真似たモックで確かめる ----------------
+import { DfuSeDevice, parseLayout, pagesFor } from "../static/js/boards/flasher.js";
+
+test("DFU: メモリ配置の解釈と、消去するページ", () => {
+  const s = parseLayout("@Internal Flash  /0x08000000/64*002Kg");
+  assert.deepEqual(s, [{ start: 0x08000000, size: 2048, count: 64 }]);
+  assert.deepEqual(pagesFor(s, 0x08000000, 2049), [0x08000000, 0x08000800]);
+  assert.equal(pagesFor(s, 0x08000000, 128 * 1024 + 1), null, "128 KB を超える");
+  assert.equal(pagesFor(s, 0x08020000, 10), null);
+});
+
+test("DFU: 消去 → アドレス設定 → ブロック書き込み → 起動の順序", async () => {
+  const calls = []; let state = 2, busy = 0;
+  const usb = {
+    configuration: { interfaces: [{ interfaceNumber: 0, alternates: [{ alternateSetting: 0, interfaceClass: 0xfe, interfaceSubclass: 1, interfaceName: "@Internal Flash  /0x08000000/64*002Kg" }] }] },
+    async open() {}, async claimInterface() {}, async selectAlternateInterface() {}, async close() {},
+    async controlTransferIn(s, n) {
+      if (s.request === 6) return { data: new DataView(Uint8Array.of(9, 2, 27, 0, 1, 1, 0, 0x80, 50, 9, 0x21, 0x0b, 255, 0, 0x00, 0x08, 0x1a, 1, 0).buffer) };
+      const st = busy > 0 ? (busy--, 4) : state;   // 命令のあと、最初の 1 回は BUSY(timeout 1 ms)を返す
+      if (st === 4) { return { data: new DataView(Uint8Array.of(0, 1, 0, 0, 4, 0).buffer) }; }
+      state = 5; return { data: new DataView(Uint8Array.of(0, 0, 0, 0, state, 0).buffer) };
+    },
+    async controlTransferOut(s, d) { calls.push([s.request, s.value, Array.from(d || [])]); if (s.request === 1) busy = 1; return { status: "ok" }; },
+  };
+  const dev = new DfuSeDevice(usb); await dev.open();
+  assert.equal(dev.xfer, 0x0800 > 2048 ? 2048 : 0x0800, "転送サイズは 2048 まで");
+  const data = new Uint8Array(3000).map((_, i) => i & 255);
+  await dev.write(0x08000000, data, () => {});
+  const dn = calls.filter((c) => c[0] === 1);
+  assert.deepEqual(dn[0], [1, 0, [0x41, 0, 0, 0, 8]], "最初のページを消去");
+  assert.deepEqual(dn[1], [1, 0, [0x41, 0, 8, 0, 8]], "2 ページ目");
+  assert.deepEqual(dn[2], [1, 0, [0x21, 0, 0, 0, 8]], "アドレス設定");
+  assert.equal(dn[3][1], 2); assert.equal(dn[3][2].length, 2048); assert.equal(dn[4][1], 3); assert.equal(dn[4][2].length, 952);
+  assert.equal(dn[4][2][0], 2048 & 255);
+  await dev.leave(0x08000000);
+  assert.deepEqual(calls.at(-1), [1, 0, []], "最後は長さ 0 の DNLOAD");
+});

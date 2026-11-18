@@ -21,11 +21,29 @@ Integral のロボコン用基板 **HQDD1 / BDCMD_X1 / main_board / LDS01_ESP32*
 
 > 写真は、各基板リポジトリの KiCad ファイルから生成した上面の 3D 画像です(実物の写真ではありません)。実物の写真に差し替えるときは、`static/img/boards/<基板名>.webp` を置き換えてください(番号の位置は `static/js/boards/index.js` の `photo.pins` で、画像に対する % 指定です)。画像は `tools/render_boards.sh` で作り直せます。
 
+## 公開ページ
+
+<https://integralindustries.github.io/integral_webui/> で、インストールなしで使えます(GitHub Pages)。ただし公開ページは https なので、**USB シリアルとファームウェア書き込みだけ**です。CAN と Wi-Fi(UDP)は、下の `server.py` をローカルで動かして `http://localhost:8080` を開いてください。
+
+## ファームウェアの書き込み(ブラウザから)
+
+基板の画面の「ファームウェア書き込み」タブから、ST-Link や PlatformIO なしで書き込めます(Chrome / Edge)。
+
+| 基板 | 方法 | 準備 |
+|---|---|---|
+| main_board / LDS01_ESP32 | [esptool-js](https://github.com/espressif/esptool-js)(Web Serial) | USB でつなぐ。`firmware.bin`(0x10000)。新品は `bootloader.bin` / `partitions.bin` / `boot_app0.bin` も(ファイル名からアドレスを自動で入れます) |
+| BDCMD_X1 | USB DFU(WebUSB、DfuSe をこのリポジトリで実装) | SW1 を押したまま USB をつなぐ。`firmware.bin` を 0x08000000 へ。新しい基板は、書き込み後にオプションバイトの変更が必要(画面にも出ます) |
+| HQDD1 | 非対応 | USB がないので ST-Link(SWD)で書き込む |
+
+ファイルは、`pio run` でできる `.pio/build/<env>/*.bin` を選ぶか、各リポジトリの GitHub リリースから取得します(リリースを作ると「GitHub のリリースから取得」で選べます)。書き込む前に、ファイルの種類(ESP32 は先頭 0xE9、STM32 はスタックポインタとリセットベクタ)を確認し、確認ダイアログを出します。esptool-js は jsDelivr の CDN から読み込みます(オフラインでは ESP32 の書き込みは使えません)。
+
+> DFU の書き込みは、実機のない環境で、DfuSe の手順を真似たモックでテストしています。実機での確認はまだです。うまくいかないときは、`dfu-util` や STM32CubeProgrammer と同じ結果になるか比べてください。
+
 ## 使い方
 
 ### USB / UART だけなら、サーバ不要
 
-Chrome か Edge で `static/index.html` を配信するだけで使えます(Web Serial。Firefox / Safari は非対応)。
+公開ページを開くか、Chrome か Edge で `static/index.html` を配信するだけで使えます(Web Serial。Firefox / Safari は非対応)。
 
 ```bash
 cd static && python3 -m http.server 8099      # → http://localhost:8099
@@ -83,7 +101,7 @@ integral_webui/
 │       ├── protocol.js      各基板の通信仕様(デコード・エンコード)。画面なし、テストあり
 │       ├── chart.js         リアルタイムグラフ
 │       ├── ui.js            画面部品
-│       └── boards/          基板ごとの画面(hqdd1, bdcmd_x1, main_board, lds01_esp32, can_monitor)と、基板情報(index.js)
+│       └── boards/          基板ごとの画面(hqdd1, bdcmd_x1, main_board, lds01_esp32, can_monitor)、基板情報(index.js)、書き込み(flasher.js)
 ├── tests/               protocol.js の単体テスト(node --test tests/)
 └── tools/
     ├── render_boards.sh     基板画像を KiCad ファイルから作る
