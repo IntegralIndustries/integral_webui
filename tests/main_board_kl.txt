@@ -1,0 +1,101 @@
+cs saved=0 reboot=0 drive=1 wheels=4 steers=0 joints=0 max_joints=8
+cf g.driveType u 0 5 1 1 1 1 |足回りの種類(再起動後に反映)|足回りの種類|0:なし(機構だけ)|1:メカナム 4 輪|2:オムニ 3 輪|3:オムニ 4 輪|4:独立ステア 3 輪|5:独立ステア 4 輪
+cf g.controlMode u 1 2 1 1 1 1 |操縦の入力(再起動後に反映)|操縦・起動|1:PS4 コントローラ(Bluetooth)|2:PC の速度指令(V / ROS の cmd_vel)
+cf g.useWifi b 0 1 1 1 1 1 |Wi-Fi を使う(再起動後に反映)|操縦・起動|
+cf g.startEnabled b 0 1 1 1 1 0 |起動したときから足回りを有効にする|操縦・起動|
+cf g.holdEstopMs w 100 5000 50 500 500 0 ms|非常停止の長押しの時間|操縦・起動|
+cf g.holdEnableMs w 100 10000 50 1000 1000 0 ms|解除・有効の長押しの時間|操縦・起動|
+cf g.headingHold b 0 1 1 0 0 0 |向きの保持を使う(IMU のジャイロ)|向きの保持|
+cf g.headingKp f 0 20 0.1 2 2 0 (rad/s)/rad|向きの保持のゲイン|向きの保持|
+cf g.headingMax f 0 10 0.1 1 1 0 rad/s|補正の旋回速度の上限|向きの保持|
+cf g.imuInvert b 0 1 1 0 0 0 |ジャイロ z の符号を反転|向きの保持|
+cf g.maxVx f 0 10 0.05 1 1 0 m/s|最大速度 前後|速度の上限|
+cf g.maxVy f 0 10 0.05 1 1 0 m/s|最大速度 左右|速度の上限|
+cf g.maxWz f 0 30 0.1 3 3 0 rad/s|最大速度 旋回|速度の上限|
+cf g.speedNormal f 0 1 0.05 0.5 0.5 0 倍|PS4 通常の倍率|PS4 操縦|
+cf g.speedSlow f 0 1 0.05 0.2 0.2 0 倍|PS4 L1(低速)の倍率|PS4 操縦|
+cf g.deadzone f 0 0.5 0.01 0.08 0.08 0 |スティックの不感帯|PS4 操縦|
+cf g.accelV f 0 100 0.1 3 3 0 m/s²|加速度の制限(並進)|加速度|
+cf g.accelW f 0 300 0.5 10 10 0 rad/s²|加速度の制限(旋回)|加速度|
+cf g.wheelRadius f 0.005 1 0.001 0.05 0.05 0 m|車輪の半径|足回りの寸法|
+cf g.mecLx f 0 2 0.005 0.15 0.15 0 m|メカナム 前後の距離 LX|足回りの寸法|
+cf g.mecLy f 0 2 0.005 0.15 0.15 0 m|メカナム 左右の距離 LY|足回りの寸法|
+cf g.wheelX0 f -2 2 0.005 0.15 0.15 0 m|車輪 1 の位置 x(前)|車輪の位置(オムニ・独立ステア)|
+cf g.wheelY0 f -2 2 0.005 0.15 0.15 0 m|車輪 1 の位置 y(左)|車輪の位置(オムニ・独立ステア)|
+cf g.wheelX1 f -2 2 0.005 0.15 0.15 0 m|車輪 2 の位置 x|車輪の位置(オムニ・独立ステア)|
+cf g.wheelY1 f -2 2 0.005 -0.15 -0.15 0 m|車輪 2 の位置 y|車輪の位置(オムニ・独立ステア)|
+cf g.wheelX2 f -2 2 0.005 -0.15 -0.15 0 m|車輪 3 の位置 x|車輪の位置(オムニ・独立ステア)|
+cf g.wheelY2 f -2 2 0.005 0.15 0.15 0 m|車輪 3 の位置 y|車輪の位置(オムニ・独立ステア)|
+cf g.wheelX3 f -2 2 0.005 -0.15 -0.15 0 m|車輪 4 の位置 x|車輪の位置(オムニ・独立ステア)|
+cf g.wheelY3 f -2 2 0.005 -0.15 -0.15 0 m|車輪 4 の位置 y|車輪の位置(オムニ・独立ステア)|
+cf g.escMin0 w 500 2500 1 1000 1000 0 µs|ESC1 最小|ESC のパルス|
+cf g.escNeutral0 w 500 2500 1 1500 1500 0 µs|ESC1 中立|ESC のパルス|
+cf g.escMax0 w 500 2500 1 2000 2000 0 µs|ESC1 最大|ESC のパルス|
+cf g.escMin1 w 500 2500 1 1000 1000 0 µs|ESC2 最小|ESC のパルス|
+cf g.escNeutral1 w 500 2500 1 1500 1500 0 µs|ESC2 中立|ESC のパルス|
+cf g.escMax1 w 500 2500 1 2000 2000 0 µs|ESC2 最大|ESC のパルス|
+cf g.escMin2 w 500 2500 1 1000 1000 0 µs|ESC3 最小|ESC のパルス|
+cf g.escNeutral2 w 500 2500 1 1500 1500 0 µs|ESC3 中立|ESC のパルス|
+cf g.escMax2 w 500 2500 1 2000 2000 0 µs|ESC3 最大|ESC のパルス|
+cf g.escMin3 w 500 2500 1 1000 1000 0 µs|ESC4 最小|ESC のパルス|
+cf g.escNeutral3 w 500 2500 1 1500 1500 0 µs|ESC4 中立|ESC のパルス|
+cf g.escMax3 w 500 2500 1 2000 2000 0 µs|ESC4 最大|ESC のパルス|
+cf g.escP f 0 5 0.005 0.05 0.05 0 スロットル/(rad/s)|ESC 速度 PID の P|ESC の速度 PID(escPid)|
+cf g.escI f 0 50 0.05 0.5 0.5 0 スロットル/rad|ESC 速度 PID の I|ESC の速度 PID(escPid)|
+cf g.servoUs0 w 300 1500 1 500 500 0 µs|サーボ 0° のパルス|サーボのパルス|
+cf g.servoUs180 w 1500 3000 1 2500 2500 0 µs|サーボ 180° のパルス|サーボのパルス|
+cf g.lowbatCell f 2.8 3.7 0.05 3.3 3.3 0 V/セル|低電圧で止めるセル電圧|電池|
+ca d0 BDCMD_VEL 駆動 1
+cf d0.type u 0 8 1 1 1 1 |種類(再起動後に反映)||0:使わない|1:BDCMD_X1 速度|2:BDCMD_X1 デューティ|4:HQDD1 速度|6:ESC(開ループ)|7:ESC + エンコーダで速度 PID
+cf d0.dev u 0 7 1 0 0 1 |ID / 番号||
+cf d0.ch u 1 4 1 1 1 1 |ch||
+cf d0.invert b 0 1 1 0 0 0 |回転方向を反転||
+cf d0.gear f -1000 1000 0.01 1 1 0 |比(出力軸の回転数 / 車輪・関節の回転数)||
+ca d1 BDCMD_VEL 駆動 2
+cf d1.type u 0 8 1 1 1 1 |種類(再起動後に反映)||0:使わない|1:BDCMD_X1 速度|2:BDCMD_X1 デューティ|4:HQDD1 速度|6:ESC(開ループ)|7:ESC + エンコーダで速度 PID
+cf d1.dev u 0 7 1 0 0 1 |ID / 番号||
+cf d1.ch u 1 4 1 2 2 1 |ch||
+cf d1.invert b 0 1 1 0 0 0 |回転方向を反転||
+cf d1.gear f -1000 1000 0.01 1 1 0 |比(出力軸の回転数 / 車輪・関節の回転数)||
+ca d2 BDCMD_VEL 駆動 3
+cf d2.type u 0 8 1 1 1 1 |種類(再起動後に反映)||0:使わない|1:BDCMD_X1 速度|2:BDCMD_X1 デューティ|4:HQDD1 速度|6:ESC(開ループ)|7:ESC + エンコーダで速度 PID
+cf d2.dev u 0 7 1 0 0 1 |ID / 番号||
+cf d2.ch u 1 4 1 3 3 1 |ch||
+cf d2.invert b 0 1 1 0 0 0 |回転方向を反転||
+cf d2.gear f -1000 1000 0.01 1 1 0 |比(出力軸の回転数 / 車輪・関節の回転数)||
+ca d3 BDCMD_VEL 駆動 4
+cf d3.type u 0 8 1 1 1 1 |種類(再起動後に反映)||0:使わない|1:BDCMD_X1 速度|2:BDCMD_X1 デューティ|4:HQDD1 速度|6:ESC(開ループ)|7:ESC + エンコーダで速度 PID
+cf d3.dev u 0 7 1 0 0 1 |ID / 番号||
+cf d3.ch u 1 4 1 4 4 1 |ch||
+cf d3.invert b 0 1 1 0 0 0 |回転方向を反転||
+cf d3.gear f -1000 1000 0.01 1 1 0 |比(出力軸の回転数 / 車輪・関節の回転数)||
+ca j0 NONE 関節 0
+cf j0.type u 0 8 1 0 0 1 |種類(再起動後に反映)||0:使わない|3:BDCMD_X1 位置|5:HQDD1 位置|8:サーボ
+ca j1 HQDD_POS 関節 1
+cf j1.type u 0 8 1 5 0 1 |種類(再起動後に反映)||0:使わない|3:BDCMD_X1 位置|5:HQDD1 位置|8:サーボ
+cf j1.dev u 0 7 1 2 0 1 |ID / 番号||
+cf j1.invert b 0 1 1 0 0 0 |回転方向を反転||
+cf j1.gear f -1000 1000 0.01 1 1 0 |比(出力軸の回転数 / 車輪・関節の回転数)||
+cf j1.encPort u 0 7 1 3 0 0 ENC|エンコーダのポート(0 = 使わない)||
+cf j1.encRatio f -100 100 0.01 1 1 0 |エンコーダ比(エンコーダ軸 / 関節の回転数)||
+cf j1.encZeroRad f 0 6.2832 0.001 0 0 0 rad|関節 0 のときのエンコーダの角度||
+cf j1.encInv b 0 1 1 0 0 0 |エンコーダの回転方向が逆||
+cf j1.encTau f 0 600 0.1 0 0 0 s|エンコーダへの補正の時定数(0 = 起動時だけ)||
+cf j1.initRad f -100 100 0.01 0 0 0 rad|電源投入時の角度(エンコーダなし)||
+cf j1.lo f -1e+06 1e+06 0.01 -1 -1e+06 0 rad|可動範囲 最小||
+cf j1.hi f -1e+06 1e+06 0.01 2 1e+06 0 rad|可動範囲 最大||
+cf j1.rate f 0 100 0.1 0 0 0 rad/s|最大の変化速度(0 = 制限なし)||
+cf j1.home f -100 100 0.01 0 0 0 rad|ホームの角度||
+ca j2 NONE 関節 2
+cf j2.type u 0 8 1 0 0 1 |種類(再起動後に反映)||0:使わない|3:BDCMD_X1 位置|5:HQDD1 位置|8:サーボ
+ca j3 NONE 関節 3
+cf j3.type u 0 8 1 0 0 1 |種類(再起動後に反映)||0:使わない|3:BDCMD_X1 位置|5:HQDD1 位置|8:サーボ
+ca j4 NONE 関節 4
+cf j4.type u 0 8 1 0 0 1 |種類(再起動後に反映)||0:使わない|3:BDCMD_X1 位置|5:HQDD1 位置|8:サーボ
+ca j5 NONE 関節 5
+cf j5.type u 0 8 1 0 0 1 |種類(再起動後に反映)||0:使わない|3:BDCMD_X1 位置|5:HQDD1 位置|8:サーボ
+ca j6 NONE 関節 6
+cf j6.type u 0 8 1 0 0 1 |種類(再起動後に反映)||0:使わない|3:BDCMD_X1 位置|5:HQDD1 位置|8:サーボ
+ca j7 NONE 関節 7
+cf j7.type u 0 8 1 0 0 1 |種類(再起動後に反映)||0:使わない|3:BDCMD_X1 位置|5:HQDD1 位置|8:サーボ
+ce

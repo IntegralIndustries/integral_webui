@@ -3,6 +3,7 @@ import { mainDecodeLine, classifyCan, hex, toBytes, gamepadToG } from "../protoc
 import { ChartBoard } from "../chart.js";
 import { LogPanel, el } from "../ui.js";
 import configTab from "./main_board_config.js";
+import settingsTab from "./main_board_settings.js";
 import { espFlasher } from "./flasher.js";
 
 const SERIES = {
@@ -89,7 +90,7 @@ const stopCmds = () => [{ text: "V 0 0 0" }, { text: "D 0" }, { text: "T 0" }];
 export default {
   id: "main_board",
   stopCmds(conn) { return conn.mode === "udp" ? stopCmds().map((t) => ({ kind: "udp", ...t })) : stopCmds().map((t) => ({ kind: "uart", ...t })); },
-  extraTabs: [{ id: "config", label: "robot_config.h 作成", mount: configTab }, { id: "flash", label: "ファームウェア書き込み", mount: espFlasher("main_board") }],
+  extraTabs: [{ id: "settings", label: "設定(基板に直接)", mount: settingsTab }, { id: "config", label: "robot_config.h 作成(ビルドする人向け)", mount: configTab }, { id: "flash", label: "ファームウェア書き込み", mount: espFlasher("main_board") }],
 
   create(ctx) {
     const root = ctx.root;
@@ -123,6 +124,7 @@ export default {
     // ---------- 受信 ----------
     function onLine(line) {
       st.got = true;   // 何か返ってきた(接続できている)
+      if (/^(cs |cf |ce$|c (ok|err|applied|rebooting|reset)\b|ca )/.test(line)) return;   // 設定の画面(main_board_settings.js)が読む
       if (/^e( \d=|$)/.test(line)) {   // E の応答: e 1=1.2345 2=nan ...
         for (const [, n, v] of line.matchAll(/(\d)=(-?[\d.]+|nan)/g)) encV.abs[+n - 1] = v === "nan" ? NaN : +v;
         drawEnc(); ctx.markRx(); return;

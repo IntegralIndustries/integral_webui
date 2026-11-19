@@ -223,3 +223,28 @@ export function gamepadToG(axes, buttons) {
   const f = (v) => (clamp(v, -1, 1) + 0).toFixed(3).replace("-0.000", "0.000");
   return `G ${f(ax(0))} ${f(-ax(1))} ${f(ax(2))} ${f(-ax(3))} ${f(clamp(val(6), 0, 1))} ${f(clamp(val(7), 0, 1))} ${bits.toString(16).toUpperCase()}`;
 }
+
+// ---------------- main_board の設定コマンド(K*)の応答 ----------------
+// KL(設定の一覧)の応答:
+//   cs saved=0 reboot=0 drive=1 wheels=4 steers=0 joints=0 max_joints=8
+//   cf <名前> <型> <最小> <最大> <刻み> <今の値> <初期値> <要再起動> <単位>|<ラベル>|<グループ>|<選択肢>     名前 = g.maxVx、d0.gear など
+//   ca <d / s / j><番号> <種類> <グループ名> <番号>                                                         (そのアクチュエータの cf の前)
+//   ce                                                                                                      (終わり)
+// KS / KA / KZ / KB / KR の応答: c ok / c err ... / c applied reboot=1 / c rebooting / c reset ...
+export function parseCfgLine(line) {
+  let m;
+  if (line === "ce") return { type: "ce" };
+  if ((m = /^cs (.*)$/.exec(line))) {
+    const kv = Object.fromEntries(m[1].split(" ").map((x) => x.split("=")));
+    return { type: "cs", saved: +kv.saved, reboot: +kv.reboot, drive: +kv.drive, wheels: +kv.wheels, steers: +kv.steers, joints: +kv.joints, maxJoints: +kv.max_joints };
+  }
+  if ((m = /^ca (\S+) (\S+) (\S+) (\S+)$/.exec(line))) return { type: "ca", id: m[1], actType: m[2], group: m[3], num: +m[4] };
+  if ((m = /^cf (\S+) (\S) (\S+) (\S+) (\S+) (\S+) (\S+) (\d) (.*)$/.exec(line))) {
+    const parts = m[9].split("|");   // 選択肢の中にも | があるので、先頭の 3 つだけ分ける
+    return { type: "cf", name: m[1], t: m[2], lo: +m[3], hi: +m[4], step: +m[5], v: +m[6], d: +m[7], rb: m[8] === "1", unit: parts[0], label: parts[1], group: parts[2], opts: parts.slice(3).join("|") };
+  }
+  if ((m = /^c (ok|err|applied|rebooting|reset)\b(.*)$/.exec(line))) return { type: "c", status: m[1], rest: m[2].trim() };
+  return null;
+}
+/** "0:使わない|3:BDCMD_X1 位置" → [[0, "使わない"], [3, "BDCMD_X1 位置"]] */
+export const parseOpts = (s) => (s ? s.split("|").map((x) => { const i = x.indexOf(":"); return [+x.slice(0, i), x.slice(i + 1)]; }) : []);

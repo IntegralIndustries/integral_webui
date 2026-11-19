@@ -186,3 +186,20 @@ test("ゲームパッド(Gamepad API)→ G コマンド", () => {
   assert.equal(P.gamepadToG(axes, btn), "G -1.000 1.000 0.000 0.000 0.000 0.500 2120");
   assert.equal(P.gamepadToG([], []), "G 0.000 0.000 0.000 0.000 0.000 0.000 0");
 });
+
+test("main_board の設定の一覧(KL)の解釈(基板のコードが実際に出力した行)", async () => {
+  const fs = await import("node:fs");
+  const lines = fs.readFileSync(new URL("./main_board_kl.txt", import.meta.url), "utf8").split("\n").filter(Boolean);
+  const parsed = lines.map(P.parseCfgLine);
+  assert.ok(parsed.every(Boolean), "すべての行が読める: " + lines[parsed.findIndex((x) => !x)]);
+  const cs = parsed[0]; assert.equal(cs.type, "cs"); assert.equal(cs.wheels, 4); assert.equal(cs.maxJoints, 8); assert.equal(cs.reboot, 0);
+  const g = parsed.find((x) => x.name === "g.driveType");
+  assert.equal(g.t, "u"); assert.equal(g.v, 1); assert.equal(g.rb, true); assert.match(g.label, /足回りの種類/);
+  assert.deepEqual(P.parseOpts(g.opts)[0], [0, "なし(機構だけ)"]); assert.equal(P.parseOpts(g.opts).length, 6);
+  const gear = parsed.find((x) => x.name === "d0.gear"); assert.equal(gear.t, "f"); assert.equal(gear.v, 1); assert.equal(gear.rb, false);
+  assert.equal(parsed.filter((x) => x.type === "ca").length, 4 + 8);   // 駆動 4 + 関節 8
+  assert.equal(parsed.at(-1).type, "ce");
+  const lo = parsed.find((x) => x.name === "j1.lo"); assert.equal(lo.v, -1);   // 関節 1 は HQDD 位置にした
+  assert.deepEqual(P.parseCfgLine("c applied reboot=1"), { type: "c", status: "applied", rest: "reboot=1" });
+  assert.equal(P.parseCfgLine("c 120 4D43310A"), null, "CAN の転送行(c <ID> <データ>)とは区別する");
+});

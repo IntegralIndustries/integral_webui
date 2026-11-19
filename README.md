@@ -13,7 +13,7 @@ Integral のロボコン用基板 **HQDD1 / BDCMD_X1 / main_board / LDS01_ESP32*
 |---|---|---|
 | **[HQDD1](https://github.com/IntegralIndustries/hqdd1)** | CAN / UART | トルク・速度・位置の運転、PID・制限値の調整、フラッシュへの保存、出荷状態に戻す、高速キャプチャ(ステップ応答)、リアルタイムグラフ |
 | **[BDCMD_X1](https://github.com/IntegralIndustries/bdcmd_x1)** | CAN / UART | 4ch それぞれのモード(デューティ / 速度 / 位置)と目標、基板全体と ch ごとのパラメータ、状態フラグ、保存、グラフ |
-| **[main_board](https://github.com/IntegralIndustries/main_board)** | USB / Wi-Fi(UDP) | 足回りの操縦(円・キーボード)、非常停止、サーボ・ESC・モーターの出力、CAN の中継、状態グラフ、**Wi-Fi の接続先の設定(USB)、ゲームパッド(PS4 以外も)での操縦、エンコーダの数値表示、`robot_config.h` の作成(独立ステアの可動範囲・外部エンコーダを含む)** |
+| **[main_board](https://github.com/IntegralIndustries/main_board)** | USB / Wi-Fi(UDP) | 足回りの操縦(円・キーボード)、非常停止、サーボ・ESC・モーターの出力、CAN の中継、状態グラフ、**USB だけでの全設定(「設定(基板に直接)」。ビルドも設定ファイルも不要)、Wi-Fi の接続先の設定(USB)、ゲームパッド(PS4 以外も)での操縦、エンコーダの数値表示、`robot_config.h` の作成(独立ステアの可動範囲・外部エンコーダを含む)** |
 | **[LDS01_ESP32](https://github.com/IntegralIndustries/lds01_esp32)** | Wi-Fi(UDP) / UART / CAN | LiDAR の点群(360°)と 8 方向の最短距離の表示、START / STOP、**`config.h` の作成** |
 | **全基板(CAN バス)** | CAN | バスにいる基板と ID の一覧、流れているフレームの表示、全基板への非常停止 |
 
