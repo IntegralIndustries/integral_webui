@@ -12,7 +12,7 @@ const DRIVE_ACTS = [["none", "使わない"], ["bdcmd", "BDCMD_X1 速度(エン�
 const STEER_ACTS = [["none", "使わない"], ["bdcmdPos", "BDCMD_X1 位置(エンコーダ要)"], ["hqddPos", "HQDD1 位置"], ["servo", "サーボ(±90°)"]];
 
 const DEFAULTS = {
-  control: "CONTROL_AUTO", mac: "ec:e3:34:91:04:ca", maxvx: 1, maxvy: 1, maxwz: 3, normal: 0.5, slow: 0.2,
+  control: "CONTROL_PS4", wifi: true, start: true, mac: "ec:e3:34:91:04:ca", maxvx: 1, maxvy: 1, maxwz: 3, normal: 0.5, slow: 0.2,
   drive: "DRIVE_MECANUM4", radius: 0.05, lx: 0.15, ly: 0.15,
   pos: [[0.15, 0.15], [0.15, -0.15], [-0.15, 0.15], [-0.15, -0.15]],
   wheels: [0, 1, 2, 3].map((i) => ({ t: "bdcmd", id: 0, ch: i + 1, max: 60, enc: i + 1, encRatio: 1, inv: false, ratio: 1, off: 0 })),
@@ -58,6 +58,8 @@ export function buildParts(c) {
   const d = DRIVES.find((x) => x[0] === c.drive);
   const parts = [
     [/^#define CONTROL_MODE .*$/m, `#define CONTROL_MODE ${c.control}`],
+    [/^#define USE_WIFI .*$/m, `#define USE_WIFI ${c.wifi ? 1 : 0}`],
+    [/^constexpr bool DRIVE_START_ENABLED = [^;]*;/m, `constexpr bool DRIVE_START_ENABLED = ${c.start ? "true" : "false"};`],
     [/^#define PS4_HOST_MAC .*$/m, `#define PS4_HOST_MAC "${c.mac}"`],
     [/^constexpr float MAX_VX = [^;]*;/m, `constexpr float MAX_VX = ${F(c.maxvx)};`],
     [/^constexpr float MAX_VY = [^;]*;/m, `constexpr float MAX_VY = ${F(c.maxvy)};`],
@@ -103,12 +105,14 @@ export function check(c) {
     } else if (a.t !== "servo" && +a.init === 0) w.push(`操舵${i + 1}: 外部エンコーダがないので、電源を入れるとき操舵を「角度 0(真っすぐ前)」にしておいてください(0 でなければ起動時の角度を指定)`);
   }
   if (d[3]) w.push("独立ステアは、各輪が「駆動」と「操舵」の 2 つのアクチュエータを使います。操舵を「使わない」にすると向きが変わりません。");
-  if (c.control === "CONTROL_PS4_ONLY") w.push("PS4 のみの設定では、Wi-Fi が使えません(この UI の UDP 接続も不可。USB シリアルなら使えます)。");
+  if (c.control === "CONTROL_PC") w.push("PC 操縦では Bluetooth を使いません(PS4 では操縦できません)。この UI や ROS から送る「ゲームパッド(G)」は使えます。");
+  if (!c.wifi) w.push("Wi-Fi を使わない設定です。基板の Web UI、UDP、ROS 2(UDP)は使えません(USB は使えます)。");
   return w;
 }
 
 export default function mount(root, ctx) {
   const c = { ...structuredClone(DEFAULTS), ...(localGet("integral_robot_config", {}) || {}) };
+  if (c.control !== "CONTROL_PS4" && c.control !== "CONTROL_PC") c.control = "CONTROL_PS4";   // 古い保存(AUTO / PS4_ONLY / PC_ONLY)
   let source = null;   // 読み込んだ robot_config.h
   root.innerHTML = `<div class="info cfg"><div class="cols" style="grid-template-columns:minmax(320px,520px) minmax(0,1fr)">
     <div id="form"></div>
@@ -148,7 +152,9 @@ export default function mount(root, ctx) {
     const d = DRIVES.find((x) => x[0] === c.drive);
     form.innerHTML = `
     <div class="card"><h2>1. 操縦の入力</h2>
-      <div class="row"><select data-k="control"><option value="CONTROL_AUTO">AUTO: PS4 があれば PS4、なければ PC</option><option value="CONTROL_PS4_ONLY">PS4 のみ(Wi-Fi 不使用)</option><option value="CONTROL_PC_ONLY">PC のみ(Bluetooth 不使用)</option></select></div>
+      <div class="row"><select data-k="control"><option value="CONTROL_PS4">PS4 コントローラ(Bluetooth)で操縦</option><option value="CONTROL_PC">PC の速度指令(V / ROS の cmd_vel)で操縦(Bluetooth 不使用)</option></select></div>
+      <div class="row"><label><input type="checkbox" data-k="wifi" ${c.wifi ? "checked" : ""}>Wi-Fi を使う(Web UI・UDP・ROS 2)</label></div>
+      <div class="row"><label><input type="checkbox" data-k="start" ${c.start ? "checked" : ""}>起動したときから足回りを有効にする</label></div>
       <div class="row"><label>PS4 に書き込んだ接続先 MAC <input type="text" data-k="mac" value="${esc(c.mac)}" style="width:170px"></label></div>
       <div class="row"><label>最大 vx ${num("maxvx", c.maxvx)}m/s</label><label>vy ${num("maxvy", c.maxvy)}m/s</label><label>wz ${num("maxwz", c.maxwz)}rad/s</label></div>
       <div class="row"><label>PS4 の速度倍率: 通常 ${num("normal", c.normal)} 低速(L1) ${num("slow", c.slow)}</label></div></div>
@@ -162,7 +168,7 @@ export default function mount(root, ctx) {
       <div class="small mute" style="margin-top:6px">BDCMD_X1 / HQDD1 側のゲイン・減速比・エンコーダの向きは、各基板のパラメータ(「BDCMD_X1」「HQDD1」の画面)で設定して保存してください。ここで決めるのは、main_board がどの基板のどの ch を使うかです。</div></div>`;
     form.querySelectorAll("[data-k]").forEach((e) => {
       if (e.tagName === "SELECT") e.value = c[e.dataset.k];
-      e.onchange = () => { c[e.dataset.k] = e.type === "number" ? +e.value : e.value; if (e.dataset.k === "drive") render(); update(); };
+      e.onchange = () => { c[e.dataset.k] = e.type === "checkbox" ? e.checked : e.type === "number" ? +e.value : e.value; if (e.dataset.k === "drive") render(); update(); };
     });
     form.querySelectorAll("[data-pos]").forEach((e) => (e.onchange = () => { c.pos[+e.dataset.pos][+e.dataset.a] = +e.value; update(); }));
     form.querySelectorAll("tr[data-kind]").forEach((tr) => {

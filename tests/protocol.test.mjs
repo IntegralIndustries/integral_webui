@@ -112,7 +112,7 @@ test("robot_config.h の生成", () => {
   assert.equal(actExpr({ t: "hqddPos", id: 2, ratio: 1, inv: false, lo: "", hi: 1.5, rate: "" }), "Act::hqddPos(2).limit(-ANGLE_NO_LIMIT, 1.5f)");
   assert.equal(actExpr({ t: "hqddPos", id: 2, ratio: 1, inv: false }), "Act::hqddPos(2)", "古い保存データ(新しい項目なし)でも壊れない");
   assert.equal(actExpr({ t: "escPid", id: 1, max: 60, enc: 1, encRatio: 1, ratio: 1 }), "Act::escPid(1, 60.0f, 1, 1.0f)");
-  const c = { control: "CONTROL_AUTO", mac: "aa:bb", maxvx: 1, maxvy: 1, maxwz: 3, normal: 0.5, slow: 0.2, drive: "DRIVE_MECANUM4", radius: 0.05, lx: 0.15, ly: 0.15,
+  const c = { control: "CONTROL_PS4", wifi: true, start: true, mac: "aa:bb", maxvx: 1, maxvy: 1, maxwz: 3, normal: 0.5, slow: 0.2, drive: "DRIVE_MECANUM4", radius: 0.05, lx: 0.15, ly: 0.15,
     pos: [[0.15, 0.15], [0.15, -0.15], [-0.15, 0.15], [-0.15, -0.15]],
     wheels: [1, 2, 3, 4].map((ch) => ({ t: "bdcmd", id: 0, ch, ratio: 1, inv: false, off: 0 })), steer: [1, 2, 3, 4].map(() => ({ t: "none" })) };
   const txt = buildParts(c).map((p) => p[1]).join("\n");
@@ -126,7 +126,7 @@ test("robot_config.h: 実物のファイルのすべての項目を書き換え�
   const fs = await import("node:fs"), path = new URL("../../main_board/firmware/src/config/robot_config.h", import.meta.url);
   if (!fs.existsSync(path)) return t.skip("main_board リポジトリが隣にない");
   const src = fs.readFileSync(path, "utf8");
-  const c = { control: "CONTROL_PC_ONLY", mac: "aa:bb:cc:dd:ee:ff", maxvx: 1.5, maxvy: 1, maxwz: 3, normal: 0.5, slow: 0.2, drive: "DRIVE_SWERVE4", radius: 0.05, lx: 0.15, ly: 0.15,
+  const c = { control: "CONTROL_PC", wifi: true, start: false, mac: "aa:bb:cc:dd:ee:ff", maxvx: 1.5, maxvy: 1, maxwz: 3, normal: 0.5, slow: 0.2, drive: "DRIVE_SWERVE4", radius: 0.05, lx: 0.15, ly: 0.15,
     pos: [[0.15, 0.15], [0.15, -0.15], [-0.15, 0.15], [-0.15, -0.15]], wheels: [1, 2, 3, 4].map((i) => ({ t: "esc", id: i, max: 60, ratio: 1, inv: false, off: 0 })),
     steer: [1, 2, 3, 4].map((i) => ({ t: "hqddPos", id: i, ratio: 1, inv: false, ep: i, er: 1, ez: 0.5, lo: -1.7, hi: 1.7 })) };
   let out = src;
@@ -173,4 +173,16 @@ test("DFU: 消去 → アドレス設定 → ブロック書き込み → 起動
   assert.equal(dn[4][2][0], 2048 & 255);
   await dev.leave(0x08000000);
   assert.deepEqual(calls.at(-1), [1, 0, []], "最後は長さ 0 の DNLOAD");
+});
+
+test("ゲームパッド(Gamepad API)→ G コマンド", () => {
+  // 標準配置: 左スティックを左・上に倒す(Gamepad API は 左 = −1、上 = −1)→ G は lx = −1(右が正)、ly = +1(上が正)
+  const axes = [-1, -1, 0, 0];
+  const btn = Array.from({ length: 18 }, () => ({ pressed: false, value: 0 }));
+  btn[0].pressed = true;                 // A = ×(bit5 = 0x20)
+  btn[9].pressed = true;                 // Start = OPTIONS(bit13 = 0x2000)
+  btn[4].pressed = true;                 // L1(bit8 = 0x100)
+  btn[7] = { pressed: true, value: 0.5 };   // R2
+  assert.equal(P.gamepadToG(axes, btn), "G -1.000 1.000 0.000 0.000 0.000 0.500 2120");
+  assert.equal(P.gamepadToG([], []), "G 0.000 0.000 0.000 0.000 0.000 0.000 0");
 });

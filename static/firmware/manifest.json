@@ -6,9 +6,9 @@
       "firmware.bin",
       "partitions.bin"
     ],
-    "commit": "3ab7ccd",
-    "built": "2026-11-18T13:05:17Z",
-    "run": 44310157488
+    "commit": "4014c59",
+    "built": "2026-11-19T07:21:33Z",
+    "run": 44478988259
   },
   "lds01_esp32": {
     "files": [
@@ -25,8 +25,8 @@
     "files": [
       "firmware.bin"
     ],
-    "commit": "f6ac5cc",
-    "built": "2026-11-18T12:44:58Z",
-    "run": 44306883523
+    "commit": "c76216d",
+    "built": "2026-11-19T07:21:36Z",
+    "run": 44478993873
   }
 }

@@ -1,5 +1,5 @@
 // main_board(ESP32 メイン制御基板)。PC からのテキストコマンド(Wi-Fi UDP / USB シリアル)で操縦・出力・CAN 中継をする。
-import { mainDecodeLine, classifyCan, hex, toBytes } from "../protocol.js";
+import { mainDecodeLine, classifyCan, hex, toBytes, gamepadToG } from "../protocol.js";
 import { ChartBoard } from "../chart.js";
 import { LogPanel, el } from "../ui.js";
 import configTab from "./main_board_config.js";
@@ -55,6 +55,12 @@ const TEMPLATE = `
     <div class="val small" id="vcmd">V 0.000 0.000 0.000</div>
     <div class="warn" id="dnote"></div>
     <div class="small mute">PS4 がつながっている間は PC の <code>V</code> は無視されます。ファームの上限(<code>MAX_VX</code> など)を超える値は制限されます。</div>
+  </div>
+  <div class="card">
+    <h2>ゲームパッドで操縦(PS4 以外も)</h2>
+    <div class="row"><label><input type="checkbox" id="gp_on">ゲームパッドの状態を基板に送る (G)</label></div>
+    <div class="small" id="gp_state">ゲームパッドが見つかりません(つないで、ボタンを 1 つ押すと認識されます)</div>
+    <div class="small mute">Xbox・PS5・PS4(USB)・Switch Pro など、ブラウザが「標準の配置」と認識するものが使えます。基板では PS4 と同じ扱いです: 左スティックで移動、右スティック左右で旋回、L1 / R1 で速度、<b>PS(ガイド)ボタン 0.5 秒長押しで非常停止、OPTIONS(Start)1 秒長押しで解除と有効</b>、SHARE(Back)で無効。<b>この画面を開いて、ウィンドウをアクティブにしている間だけ</b>送ります(離れると基板が 0.3 秒で止めます)。</div>
   </div>
   <div class="card">
     <h2>出力(サーボ / ESC / モーター)</h2>
@@ -172,6 +178,13 @@ export default {
       else if (drive.sent) { send("V 0 0 0", true); drive.sent = false; }   // 離したら 0 を送って止める
       $("dnote").textContent = active() && st.en === false ? "足回りが無効です。「有効 (D 1)」を押してください。" : "";
     }, 50);   // 基板は 300ms 途切れると止まる
+    // ---------- ゲームパッド(Gamepad API)→ G ----------
+    const gpTimer = setInterval(() => {
+      const on = $("gp_on").checked;
+      const gp = [...(navigator.getGamepads?.() || [])].find((g) => g && g.connected && g.mapping === "standard");
+      $("gp_state").textContent = gp ? `接続中: ${gp.id}` : "ゲームパッドが見つかりません(つないで、ボタンを 1 つ押すと認識されます)";
+      if (on && gp && tr.connected && document.hasFocus()) send(gamepadToG(gp.axes, gp.buttons), true);   // 画面が非アクティブなら送らない(基板が止める)
+    }, 50);
     const pad = $("pad"), knob = $("knob");
     const padMove = (e) => {
       const r = pad.getBoundingClientRect();
@@ -267,7 +280,7 @@ export default {
       },
       onDisconnect() { clearTimeout(st.helloTimer); },
       destroy() {
-        clearTimeout(st.helloTimer); clearInterval(driveTimer); offs.forEach((f) => f()); charts.destroy();
+        clearTimeout(st.helloTimer); clearInterval(driveTimer); clearInterval(gpTimer); offs.forEach((f) => f()); charts.destroy();
         document.removeEventListener("keydown", onKeyDown); document.removeEventListener("keyup", onKeyUp); removeEventListener("blur", onBlur);
       },
     };

@@ -43,6 +43,7 @@ const CH_PARAMS = [
   { n: "DR", l: "モーター方向反転", lo: 0, hi: 1, note: "1 で反転" },
   { n: "ED", l: "エンコーダ方向反転", lo: 0, hi: 1, note: "1 で反転" },
   { n: "EN", l: "使うエンコーダ", lo: 0, hi: 4, note: "ポート番号(0 = なし)。既定は ch と同じ番号" },
+  { n: "AZ", l: "位置 0 のときの絶対角度", u: "rad", lo: 0, hi: 6.2832, note: "電源投入時の位置 = wrap(エンコーダの絶対角度 − AZ) ÷ 減速比。ch の「絶対角度を 0 点に登録」で、今の姿勢から決められる(保存を忘れずに)" },
 ];
 
 const TEMPLATE = `
@@ -138,7 +139,7 @@ export default {
         <div class="row"><label data-r="lab">目標</label><span class="grow"></span><label>±<input type="number" data-r="lim" step="any" style="width:64px"></label></div>
         <input type="range" data-r="slider" step="any">
         <div class="row"><input type="number" data-r="num" step="any" class="grow" value="0"><button class="pri" data-r="send">送信</button><button data-r="zero">0</button></div>
-        <div class="row"><button data-r="en1">有効</button><button data-r="en0">無効</button><button data-r="stop">停止</button><button data-r="zpos" title="今の位置を0にする(Z)">位置を0に</button></div>
+        <div class="row"><button data-r="en1">有効</button><button data-r="en0">無効</button><button data-r="stop">停止</button><button data-r="zpos" title="今の位置を0にする(Z)。保存されない">位置を0に</button><button data-r="zabs" title="今のエンコーダの絶対角度を AZ に登録して、位置を 0 にする(ZA)。保存(W)すると、電源を入れ直しても同じ姿勢が 0 になる">絶対角度を0点に登録</button></div>
         <div class="live"><div>位置<b data-r="p">—</b>rad</div><div>速度<b data-r="v">—</b>rad/s</div><div>電流<b data-r="i">—</b>A</div><div>出力<b data-r="d">—</b>%</div></div>
         <div class="bar"><i data-r="bar"></i></div>`;
       grid.append(card);
@@ -178,6 +179,10 @@ export default {
       r("en1").onclick = () => cmd(`${n}ME1`); r("en0").onclick = () => cmd(`${n}ME0`);
       r("stop").onclick = () => { cmd(`${n}S`); localStop(i); };
       r("zpos").onclick = () => { cmd(`${n}Z`); ch[i].off = 0; ch[i].last = null; ch[i].p = 0; ch[i].target = 0; r("num").value = 0; r("slider").value = 0; };
+      r("zabs").onclick = () => {
+        cmd(`${n}ZA`); ch[i].off = 0; ch[i].last = null; ch[i].p = 0; ch[i].target = 0; r("num").value = 0; r("slider").value = 0;
+        setDirty(true); setTimeout(readAll, 300);   // AZ が変わった。「保存」で基板に残る
+      };
       o.setMode(0);
       return o;
     });

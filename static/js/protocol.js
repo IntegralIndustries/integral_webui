@@ -67,6 +67,8 @@ export const BD_FLAGS = [
   ["ID_CONFLICT", "同じ ID の基板が同じバスにいて停止中"],
 ];
 export const flagNames = (v) => BD_FLAGS.filter((_, i) => v & (1 << i)).map((f) => f[0]);
+// bit7 = ABS_POS: 異常ではない印。この版は、位置が電源投入時にエンコーダの絶対角度(AS5600 − AZ)から始まる(main_board がそれを見て、位置を絶対として扱う)
+export const BD_FLAG_ABS_POS = 0x80;
 
 export function bdcmdDecodeCan(id, d, dev) {
   if (id === CAN.BDCMD_STATUS + dev && d.length >= 5) {
@@ -204,4 +206,20 @@ export function classifyCan(id) {
   if (rng(0x320, 8)) return { board: "bdcmd_x1", dev: id - 0x320, what: "応答", from: true };
   if (rng(0x400, 32)) return { board: "bdcmd_x1", dev: (id - 0x400) >> 2, what: `ch${((id - 0x400) & 3) + 1} テレメトリ`, from: true };
   return { board: null, what: "不明" };
+}
+
+// ---------------- ゲームパッド(ブラウザの Gamepad API)→ main_board の G コマンド ----------------
+// 標準の配置(Gamepad.mapping === "standard": Xbox、PS4 / PS5、Switch Pro など)。
+// G の仕様は main_board の docs/communication_spec.md: G <lx> <ly> <rx> <ry> <l2> <r2> <ボタン(16 進)>
+//   スティックは lx / rx が右が正、ly / ry が上が正(Gamepad API は下が正なので ly / ry は反転する)
+// ボタンのビット(PS4 の並び): 上 下 左 右 □ × ○ △ L1 R1 L3 R3 SHARE OPTIONS PS タッチパッド
+const G_BUTTONS = [12, 13, 14, 15, 2, 0, 1, 3, 4, 5, 10, 11, 8, 9, 16, 17];   // 標準配置のボタン番号
+const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
+export function gamepadToG(axes, buttons) {
+  const ax = (i) => +(axes[i] || 0), val = (i) => (buttons[i] ? (typeof buttons[i] === "object" ? buttons[i].value ?? (buttons[i].pressed ? 1 : 0) : +buttons[i]) : 0);
+  const pressed = (i) => (buttons[i] ? (typeof buttons[i] === "object" ? !!buttons[i].pressed : !!buttons[i]) : false);
+  let bits = 0;
+  G_BUTTONS.forEach((idx, n) => { if (pressed(idx)) bits |= 1 << n; });
+  const f = (v) => (clamp(v, -1, 1) + 0).toFixed(3).replace("-0.000", "0.000");
+  return `G ${f(ax(0))} ${f(-ax(1))} ${f(ax(2))} ${f(-ax(3))} ${f(clamp(val(6), 0, 1))} ${f(clamp(val(7), 0, 1))} ${bits.toString(16).toUpperCase()}`;
 }
